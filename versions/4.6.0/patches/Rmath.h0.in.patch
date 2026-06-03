@@ -1,0 +1,10 @@
+--- R-4.6.0/src/include/Rmath.h0.in.orig	2026-06-03 15:25:42.114521095 +0800
++++ R-4.6.0/src/include/Rmath.h0.in	2026-06-03 15:25:42.154520626 +0800
+@@ -68,7 +68,9 @@
+ #endif
+ 
+ #if !defined(HAVE_WORKING_LOG1P)
++# ifndef __cplusplus
+ #define log1p Rlog1p
++# endif
+ #endif

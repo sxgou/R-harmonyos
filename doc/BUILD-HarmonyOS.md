@@ -8,9 +8,9 @@
 
 | 版本 | 补丁位置 | 补丁数 |
 |------|----------|--------|
-| 4.4.3 | `versions/4.4.3/patches/` | 2 |
-| 4.5.2 | `versions/4.5.2/patches/` | 4 |
-| 4.6.0 | `versions/4.6.0/patches/` | 3 |
+| 4.4.3 | `versions/4.4.3/patches/` | 3 |
+| 4.5.2 | `versions/4.5.2/patches/` | 5 |
+| 4.6.0 | `versions/4.6.0/patches/` | 4 |
 
 - **目标**: aarch64, HarmonyOS HongMeng Kernel 1.12.0
 - **工具链**: OHOS SDK 26.0.0.18 (Clang 15.0.4) + [gfortran 14.2.0](https://github.com/sxgou/gfortran-harmonyos)
@@ -194,6 +194,7 @@ bash apply-patches.sh 4.6.0
 | `etc-ldpaths.in.patch` | LD_PRELOAD 注入 libohos_stubs.so；LD_LIBRARY_PATH 加入 brew/lib 以优先使用 zlib-ng-compat | ✓ | ✓ | ✓ |
 | `src-unix-Rscript.c.patch` | execv() 失败时 dlopen("libR.so") 直接调用 Rf_initialize_R + Rf_mainloop（绕过 seccomp execv 封锁） | ✓ | ✓ | ✓ |
 | `namespace-assignNativeRoutines.patch` | 修复 `assignNativeRoutines` 中 `if(exists(...))` 跳过已存在绑定问题。惰性加载的 `C_*` 变量（EXTPTRSXP 序列化后为 NULL）不会被 `.Call` 注册覆盖，导致所有 `C_*` 调用失败 | ✗ | ✗ | ✓ |
+| `Rmath.h0.in.patch` | 给 `#define log1p Rlog1p` 添加 `#ifndef __cplusplus` 保护，防止 C++ 编译时 `::log1p` 被宏展开为 `::Rlog1p` 导致编译错误（影响 Rcpp、Armadillo 等 C++ 包） | ✓ | ✓ | ✓ |
 | `src-extra-Makefile.in-ohos_stubs.patch` | 将 ohos_stubs 加入 `src/extra/Makefile.in` 的 SUBDIRS，使 libohos_stubs.so 作为标准 make 流程的一部分自动构建 | ✗ | ✓ | ✗ |
 | `etc-ldpaths.in-LD_PRELOAD.patch` | 在 ldpaths.in 模板中嵌入 LD_PRELOAD 配置，使 libohos_stubs.so 在每次 R 启动时自动预加载 | ✗ | ✓ | ✗ |
 
