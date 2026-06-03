@@ -113,8 +113,22 @@ else
 fi
 echo ""
 
-# ------ 4. 配置用户 R 环境（~/.Rprofile）------
-echo "--- [4/5] 配置 ~/.Rprofile ---"
+# ------ 4. 修复已安装 R 的 CC17/CC23 ------
+echo "--- [4/6] 修复 CC17/CC23 ---"
+for mc in "$R_HOME/etc/Makeconf" "$BUILD_DIR/etc/Makeconf"; do
+    if [ -f "$mc" ]; then
+        for cv in CC17 CC23; do
+            if grep -q "^${cv} = \$" "$mc" 2>/dev/null; then
+                sed -i "s|^${cv} = \$|${cv} = ${OHOS_CLANG:-/data/service/hnp/bin/aarch64-unknown-linux-ohos-clang}|" "$mc"
+                echo "  [OK] 已修复 $mc 中的 ${cv}"
+            fi
+        done
+    fi
+done
+echo ""
+
+# ------ 5. 配置用户 R 环境（~/.Rprofile）------
+echo "--- [5/6] 配置 ~/.Rprofile ---"
 RPROFILE="${HOME}/.Rprofile"
 TMPDIR_DEFAULT="/data/storage/el4/base/R-build"
 PATCH_RCPP_SCRIPT="$(pwd)/versions/4.6.0/patch-rcpp.sh"

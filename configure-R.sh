@@ -274,6 +274,18 @@ if [ -f "$MAKECONF" ]; then
     fi
 fi
 
+# Fix CC17 / C23 in Makeconf: cross-compilation leaves them empty, but
+# some packages (e.g. locfit) request C17 standard and fail without CC17.
+MAKECONF="${BUILD_DIR}/etc/Makeconf"
+if [ -f "$MAKECONF" ]; then
+    for cv in CC17 CC23; do
+        if grep -q "^${cv} = \$" "$MAKECONF" 2>/dev/null; then
+            echo "Fixing ${cv} in Makeconf ..."
+            sed -i "s|^${cv} = \$|${cv} = ${OHOS_CLANG}|" "$MAKECONF"
+        fi
+    done
+fi
+
 # Inject ICU_DATA into ldpaths (sourced by bin/R at startup) so ICU
 # data is found at runtime too.
 LDPATHS="${BUILD_DIR}/etc/ldpaths"

@@ -30,7 +30,7 @@
 | `build-deps.sh` | **第 2 步** | 自动安装 brew 依赖库 |
 | `apply-patches.sh [版本]` | **第 4 步**，或由 configure-R.sh 自动调用 | 对 `src/R-版本/` 打 HarmonyOS 补丁。`bash apply-patches.sh 4.6.0` |
 | `configure-R.sh [版本]` | **第 5 步** | 配置交叉编译（自动调用 apply-patches.sh）。`bash configure-R.sh 4.6.0` |
-| `post-install-R.sh [版本]` | **第 8 步** | 生成 methods 懒加载库、NEWS.rds、配置用户 R 环境、验证安装。`bash post-install-R.sh 4.6.0` |
+| `post-install-R.sh [版本]` | **第 8 步** | 编译 libohos_stubs.so、生成 methods 懒加载库、NEWS.rds、修复 CC17/CC23、配置 ~/.Rprofile、验证安装。`bash post-install-R.sh 4.6.0` |
 | `versions/<版本>/patch-rcpp.sh` | **自动**（见 harmony_install）| 修补 Rcpp 的 undoRmath.h，解决 log1p 宏冲突。也可手动运行。 |
 
 所有步骤必须**按顺序执行**，不可跳过或调换次序。
@@ -303,14 +303,16 @@ bash post-install-R.sh
 
 此脚本自动完成：
 
-1. **生成 methods 包懒加载数据库** — 生成 `library/methods/R/methods`、`methods.rdb` (963 KB)、`methods.rdx` (23 KB)。stats4 等依赖 methods 的包需要此文件，否则加载失败。
-2. **生成 NEWS.rds / NEWS.2.rds / NEWS.3.rds** — 如果 `make install` 未自动生成，从 `NEWS.Rd` 编译。
-3. **配置用户 R 环境** — 自动创建 `~/.Rprofile`，包含：
+1. **编译 libohos_stubs.so** — 从 `src/extra/ohos_stubs/ohos_stubs.c` 编译并安装到 `$R_HOME/lib/`，补齐 OHOS libc 裁剪符号。
+2. **生成 methods 包懒加载数据库** — 生成 `library/methods/R/methods`、`methods.rdb` (963 KB)、`methods.rdx` (23 KB)。stats4 等依赖 methods 的包需要此文件，否则加载失败。
+3. **生成 NEWS.rds / NEWS.2.rds / NEWS.3.rds** — 如果 `make install` 未自动生成，从 `NEWS.Rd` 编译。
+4. **修复 CC17/CC23** — 交叉编译后 Makeconf 中 CC17/CC23 为空，导致请求 C17 标准的包（如 locfit）编译失败。此步骤将 CC17/CC23 设为 OHOS clang 完整路径。
+5. **配置用户 R 环境** — 自动创建 `~/.Rprofile`，包含：
    - `TMPDIR` 设为 hmfs 路径（避免 hmdfs 限制导致 configure 脚本失败）
    - `harmony_install()` 辅助函数，自动处理 `--host` 和 `--no-test-load`
    - Rcpp 安装后自动修补 `undoRmath.h`（解决 `log1p` 宏冲突）
    - `TMPDIR` 环境变量自动追加到 `~/.bashrc`
-4. **验证安装完整性** — 检查 R 二进制、libR.so、libohos_stubs.so 以及 base/methods/stats 等关键包是否就位。
+6. **验证安装完整性** — 检查 R 二进制、libR.so、libohos_stubs.so 以及 base/methods/stats 等关键包是否就位。
 
 脚本可在项目根目录重复运行（已存在的步骤自动跳过）。
 
@@ -573,9 +575,10 @@ LC_ALL=C ~/.local/R/lib/R/bin/R --vanilla --no-echo \
 - [x] readline 交互式终端（Tab 补全和方向键）
 - [x] Jupyter IRkernel
 - [x] Seurat 5.5.0（NormalizeData, RunPCA, FindClusters, RunUMAP 等完整流程）
+- [x] DESeq2 1.52.0（makeExampleDESeqDataSet, DESeq, results 等差异表达分析）
 - [ ] tcltk（需 Tcl/Tk 运行时）
 - [ ] 推荐包 (MASS, lattice 等)
 
 ---
 
-*最后更新: 2026-06-03（新增 namespace.R 修复补丁、Seurat 支持、harmony_install 自动化配置）*
+*最后更新: 2026-06-03（新增 CC17/CC23 修复、DESeq2 验证、namespace.R 修复补丁、Seurat 支持、harmony_install 自动化配置）*

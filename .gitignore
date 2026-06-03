@@ -15,6 +15,9 @@ lib/
 share/
 libtest*
 
+# ICU build artifacts (manually compiled)
+ICU/
+
 # Temp / intermediate
 tmp/
 *.o
