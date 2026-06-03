@@ -118,6 +118,10 @@ export PKG_CONFIG_PATH="${ICU_INSTALL}/lib/pkgconfig:${HOMEBREW_PREFIX}/lib/pkgc
 # ICU loads the actual data from this file at runtime.
 export ICU_DATA="${ICU_INSTALL}/share/icu/78.3"
 
+# OpenBLAS CPU target: restrict to NEON (avoid SVE dispatch that crashes
+# on HarmonyOS kernel with "illegal hardware instruction" at R exit).
+export OPENBLAS_CORETYPE=NEON
+
 # Pre-seed configure cache variables to skip runtime tests (blocked by seccomp)
 # and link tests that fail due to missing libraries on HarmonyOS
 for cv in \
@@ -285,6 +289,18 @@ if [ -f "$MAKECONF" ]; then
         fi
     done
 fi
+# Inject OPENBLAS_CORETYPE into Makeconf so the environment is consistent
+# during package compilation (e.g., packages using BLAS via R CMD INSTALL).
+MAKECONF="${BUILD_DIR}/etc/Makeconf"
+if [ -f "$MAKECONF" ]; then
+    if ! grep -q "^OPENBLAS_CORETYPE" "$MAKECONF" 2>/dev/null; then
+        echo "Injecting OPENBLAS_CORETYPE into Makeconf ..."
+        echo "" >> "$MAKECONF"
+        echo "## OpenBLAS CPU target: NEON (avoid SVE dispatch crash on OHOS)" >> "$MAKECONF"
+        echo "OPENBLAS_CORETYPE = NEON" >> "$MAKECONF"
+        echo "export OPENBLAS_CORETYPE" >> "$MAKECONF"
+    fi
+fi
 
 # Inject ICU_DATA into ldpaths (sourced by bin/R at startup) so ICU
 # data is found at runtime too.
@@ -299,3 +315,9 @@ if [ -f "$LDPATHS" ]; then
         echo "export ICU_DATA" >> "$LDPATHS"
     fi
 fi
+    # Inject OPENBLAS_CORETYPE into ldpaths unless already present
+    if ! grep -q "^export OPENBLAS_CORETYPE" "$LDPATHS" 2>/dev/null; then
+        echo "" >> "$LDPATHS"
+        echo "## OpenBLAS CPU target: NEON (avoid SVE dispatch crash on OHOS)" >> "$LDPATHS"
+        echo "export OPENBLAS_CORETYPE=NEON" >> "$LDPATHS"
+    fi
