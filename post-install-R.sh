@@ -160,6 +160,8 @@ if (r_lib %in% .libPaths()) {
 harmony_install <- function(pkgs,
                              repos = "https://mirrors.tuna.tsinghua.edu.cn/CRAN",
                              bioc = FALSE, github = FALSE, ...) {
+    # GitHub 包必须用 "owner/repo" 格式，例如 "satijalab/seurat-wrappers"。
+    # 不要只用包名（如 "seurat-wrappers"），否则可能匹配到多个仓库。
     if (bioc || github) {
         if (!requireNamespace("remotes", quietly = TRUE)) {
             message("Installing remotes ...")

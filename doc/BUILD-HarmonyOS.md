@@ -355,6 +355,7 @@ harmony_install("DESeq2", bioc = TRUE)
 harmony_install(c("edgeR", "limma"), bioc = TRUE)
 
 # GitHub 包（自动安装 remotes + 传递 HarmonyOS 参数）
+# 注意：必须用 "owner/repo" 格式，不要只用包名，否则可能匹配多个仓库
 harmony_install("satijalab/seurat-wrappers", github = TRUE)
 harmony_install("chris-mcginnis-ucsf/DoubletFinder", github = TRUE)
 ```
