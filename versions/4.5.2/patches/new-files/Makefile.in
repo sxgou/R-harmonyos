@@ -1,0 +1,54 @@
+#
+# ${R_HOME}/src/extra/ohos_stubs/Makefile
+
+VPATH = @srcdir@
+srcdir = @srcdir@
+top_srcdir = @top_srcdir@
+
+top_builddir = ../../..
+subdir = src/extra/ohos_stubs
+
+include $(top_builddir)/Makeconf
+
+SOURCES = ohos_stubs.c
+OBJECTS = ohos_stubs.o
+LIB = libohos_stubs@R_DYLIB_EXT@
+
+## Build with position-independent code for shared library
+ALL_CFLAGS = $(R_XTRA_CFLAGS) $(CPICFLAGS) $(SHLIB_CFLAGS) $(CFLAGS) @C_VISIBILITY@
+ALL_CPPFLAGS = $(R_XTRA_CPPFLAGS) -I$(srcdir) $(CPPFLAGS) $(DEFS)
+
+R all: Makefile
+	@$(MAKE) $(LIB)
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	@cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+
+$(LIB): $(OBJECTS)
+	$(DYLIB_LINK) -o $@ $(OBJECTS)
+
+$(OBJECTS): $(srcdir)/ohos_stubs.c
+	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) -c $< -o $@
+
+install install-strip:
+	@$(MKINSTALLDIRS) "$(DESTDIR)$(Rexeclibdir)"
+	@$(SHELL) $(top_srcdir)/tools/copy-if-change $(LIB) "$(DESTDIR)$(Rexeclibdir)/$(LIB)"
+
+mostlyclean: clean
+clean:
+	@-rm -f *.o *.lo *.so *.dylib $(LIB)
+distclean: clean
+	@-rm -f Makefile
+maintainer-clean: distclean
+
+uninstall TAGS info dvi check:
+
+distdir = $(top_builddir)/$(PACKAGE)-$(VERSION)/$(subdir)
+DISTFILES = Makefile.in ohos_stubs.c
+
+distdir: $(DISTFILES)
+	@for f in $(DISTFILES); do \
+	  test -f $(distdir)/$${f} \
+	    || ln $(srcdir)/$${f} $(distdir)/$${f} 2>/dev/null \
+	    || cp -p $(srcdir)/$${f} $(distdir)/$${f}; \
+	done

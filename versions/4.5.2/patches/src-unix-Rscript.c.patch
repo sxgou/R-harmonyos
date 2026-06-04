@@ -1,0 +1,45 @@
+--- R-4.5.2.orig/src/unix/Rscript.c	2024-12-04 22:08:25.000000000 +0800
++++ R-4.5.2/src/unix/Rscript.c	2026-06-01 16:02:55.927830312 +0800
+@@ -49,6 +49,7 @@
+ #include <string.h>
+ #include <stdlib.h>
+ #include <unistd.h> /* for execv */
++#include <dlfcn.h>  /* for dlopen (HarmonyOS execv fallback) */
+
+ #include <Rversion.h>
+
+@@ -391,8 +392,32 @@
+ 	fprintf(stderr, "'\n\n");
+     }
+ #ifndef _WIN32
+-    res = execv(cmd, av); /* will not return if R is launched */
+-    perror("Rscript execution error");
++	res = execv(cmd, av); /* will not return if R is launched */
++	/* HarmonyOS: execv is blocked by seccomp, so fall back to
++	   in-process R via libR.so loaded at runtime. */
++	do {
++	    /* Always use the compiled-in R_HOME — this is the canonical
++	       path for this R installation, regardless of user's env. */
++	    setenv("R_HOME", rhome, 1);
++	    char libR_path[R_PATH_MAX+1];
++	    int slen = snprintf(libR_path, sizeof(libR_path),
++	                       "%s/lib/libR.so", rhome);
++	    if(slen < 0 || (size_t)slen >= sizeof(libR_path))
++	        break;
++	    void *handle = dlopen(libR_path, RTLD_NOW|RTLD_GLOBAL);
++	    if(!handle)
++	        break;
++	    int (*Rf_init)(int, char**) = dlsym(handle, "Rf_initialize_R");
++	    void (*Rf_ml)(void) = dlsym(handle, "Rf_mainloop");
++	    int *rp = dlsym(handle, "R_running_as_main_program");
++	    if(!Rf_init || !Rf_ml || !rp)
++	        break;
++	    *rp = 1;
++	    Rf_init(ac, av);
++	    Rf_ml();
++	    /* not reached */
++	} while(0);
++	perror("Rscript execution error");
+ #else
+     AppMain(ac, av);
+ #endif

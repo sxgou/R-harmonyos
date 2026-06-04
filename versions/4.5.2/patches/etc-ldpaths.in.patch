@@ -1,0 +1,34 @@
+--- R-4.4.3.orig/R-4.4.3/etc/ldpaths.in	2018-09-25 16:46:55.000000000 +0800
++++ R-4.4.3/etc/ldpaths.in	2026-06-02 10:44:13.497061251 +0800
+@@ -1,13 +1,27 @@
+ : ${JAVA_HOME=@JAVA_HOME@}
+ : ${R_JAVA_LD_LIBRARY_PATH=@R_JAVA_LD_LIBRARY_PATH@}
+-if test -n "@R_LD_LIBRARY_PATH@"; then
+-: ${R_LD_LIBRARY_PATH=${R_HOME}/lib@R_ARCH@:@R_LD_LIBRARY_PATH@}
+-else
++## R_LD_LIBRARY_PATH includes R's own lib directory and the brew prefix.
++## OHOS SDK's libz.so uses custom syscalls blocked by seccomp, so we
++## must load zlib-ng-compat from brew instead.  LD_LIBRARY_PATH takes
++## precedence over DT_RPATH on musl, so placing brew/lib first ensures
++## zlib-ng-compat is found before the SDK's libz.
++## With the corrected RUNPATH order (brew before SDK), this is defensive.
++R_BREW_LIB="/storage/Users/currentUser/.harmonybrew/lib"
++: ${R_LD_LIBRARY_PATH=${R_BREW_LIB}:${R_HOME}/lib@R_ARCH@}
+-fi
+ if test -n "${R_JAVA_LD_LIBRARY_PATH}"; then
+   R_LD_LIBRARY_PATH="${R_LD_LIBRARY_PATH}:${R_JAVA_LD_LIBRARY_PATH}"
+ fi
++## Preload libohos_stubs.so to provide missing POSIX/glibc symbols
++## (pthread_setcanceltype, pthread_cancel, etc.) that OHOS stripped
++## musl libc does not include.
++if test -f "${R_HOME}/lib@R_ARCH@/libohos_stubs.so"; then
++  if test -z "${LD_PRELOAD}"; then
++    LD_PRELOAD="${R_HOME}/lib@R_ARCH@/libohos_stubs.so"
++  else
++    LD_PRELOAD="${R_HOME}/lib@R_ARCH@/libohos_stubs.so:${LD_PRELOAD}"
++  fi
++  export LD_PRELOAD
++fi
+ ## This is DYLD_FALLBACK_LIBRARY_PATH on Darwin (macOS) and
+ ## LD_LIBRARY_PATH elsewhere.
+ ## However, on macOS >=10.11 (if SIP is enabled, the default), the
