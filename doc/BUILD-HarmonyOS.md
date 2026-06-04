@@ -1,114 +1,114 @@
-# R for HarmonyOS — 交叉编译指南
+# R for HarmonyOS — Cross-Compilation Guide
 
-## 概述
+## Overview
 
-将 R 多个版本交叉编译到 HarmonyOS (aarch64-linux-ohos) 平台。
+Cross-compile R for HarmonyOS (aarch64-linux-ohos) platform.
 
-当前支持的 R 版本：
+Currently supported R versions:
 
-| 版本 | 补丁位置 | 补丁数 |
-|------|----------|--------|
-| 4.4.3 | `versions/4.4.3/patches/` | 3 |
-| 4.5.2 | `versions/4.5.2/patches/` | 5 |
-| 4.6.0 | `versions/4.6.0/patches/` | 4 |
+| Version | Patches Location | Patch Count |
+|---------|------------------|-------------|
+| 4.4.3   | `versions/4.4.3/patches/` | 3 |
+| 4.5.2   | `versions/4.5.2/patches/` | 5 |
+| 4.6.0   | `versions/4.6.0/patches/` | 4 |
 
-- **目标**: aarch64, HarmonyOS HongMeng Kernel 1.12.0
-- **工具链**: OHOS SDK 26.0.0.18 (Clang 15.0.4) + [gfortran 14.2.0](https://github.com/sxgou/gfortran-harmonyos)
-- **链接器**: lld（hmdfs 要求 `.codesign` 段，仅 lld 生成）
-- **BLAS/LAPACK**: [OpenBLAS 0.3.29](https://github.com/sxgou/openblas-harmonyos)（harmonybrew，1000x1000 MM ~0.48s / ~4.2 GFLOPs）
-- **包管理器**: [harmonybrew](https://gitcode.com/Harmonybrew/homebrew-harmony)
-- **Cairo + Pango**: 支持（brew cairo 1.18.4 + pango 1.57.1 + fontconfig 2.17.1，PNG/SVG/PDF 后端可用，Pango 文本布局增强）
-- **readline**: 启用（brew libreadline + ncurses，Tab 补全和方向键可用）
+- **Target**: aarch64, HarmonyOS HongMeng Kernel 1.12.0
+- **Toolchain**: OHOS SDK 26.0.0.18 (Clang 15.0.4) + [gfortran 14.2.0](https://github.com/sxgou/gfortran-harmonyos)
+- **Linker**: lld (hmdfs requires `.codesign` section, only lld generates it)
+- **BLAS/LAPACK**: [OpenBLAS 0.3.29](https://github.com/sxgou/openblas-harmonyos) (harmonybrew, 1000x1000 MM ~0.48s / ~4.2 GFLOPs)
+- **Package Manager**: [harmonybrew](https://gitcode.com/Harmonybrew/homebrew-harmony)
+- **Cairo + Pango**: Supported (brew cairo 1.18.4 + pango 1.57.1 + fontconfig 2.17.1, PNG/SVG/PDF backends work, Pango text layout enhanced)
+- **readline**: Enabled (brew libreadline + ncurses, Tab completion and arrow keys work)
 - **Java**: BiSheng JDK 17
 
-### 脚本总览
+### Script Overview
 
-所有脚本接受可选的版本参数，不指定则默认 R 4.4.3：
+All scripts accept an optional version argument; default is R 4.4.3:
 
-| 脚本 | 何时运行 | 作用 |
-|------|----------|------|
-| `build-deps.sh` | **第 2 步** | 自动安装 brew 依赖库 |
-| `apply-patches.sh [版本]` | **第 4 步**，或由 configure-R.sh 自动调用 | 对 `src/R-版本/` 打 HarmonyOS 补丁。`bash apply-patches.sh 4.6.0` |
-| `configure-R.sh [版本]` | **第 5 步** | 配置交叉编译（自动调用 apply-patches.sh）。`bash configure-R.sh 4.6.0` |
-| `post-install-R.sh [版本]` | **第 8 步** | 编译 libohos_stubs.so、生成 methods 懒加载库、NEWS.rds、修复 CC17/CC23、配置 ~/.Rprofile、验证安装。`bash post-install-R.sh 4.6.0` |
-| `versions/<版本>/patch-rcpp.sh` | **自动**（见 harmony_install）| 修补 Rcpp 的 undoRmath.h，解决 log1p 宏冲突。也可手动运行。 |
+| Script | When to Run | Purpose |
+|--------|-------------|---------|
+| `build-deps.sh` | **Step 2** | Automatically install brew dependency libraries |
+| `apply-patches.sh [version]` | **Step 4**, or auto-called by configure-R.sh | Apply HarmonyOS patches to `src/R-version/`. `bash apply-patches.sh 4.6.0` |
+| `configure-R.sh [version]` | **Step 5** | Configure cross-compilation (auto-invokes apply-patches.sh). `bash configure-R.sh 4.6.0` |
+| `post-install-R.sh [version]` | **Step 8** | Build libohos_stubs.so, generate methods lazy-load database, NEWS.rds, fix CC17/CC23, configure ~/.Rprofile, verify installation. `bash post-install-R.sh 4.6.0` |
+| `versions/<version>/patch-rcpp.sh` | **Automatic** (via harmony_install) | Patch Rcpp's undoRmath.h to resolve log1p macro conflict. Can also be run manually. |
 
-所有步骤必须**按顺序执行**，不可跳过或调换次序。
+All steps must be executed **in order** — do not skip or reorder.
 
 ---
 
-## 构建环境
+## Build Environment
 
-| 组件 | 路径 | 参考 |
-|------|------|------|
-| OHOS SDK | `/data/service/hnp/ohos-sdk.org/ohos-sdk_26.0.0.18/` | 华为官方 |
-| C/C++ 编译器 | `/data/service/hnp/bin/aarch64-unknown-linux-ohos-clang++` | OHOS SDK 自带 |
+| Component | Path | Reference |
+|-----------|------|-----------|
+| OHOS SDK | `/data/service/hnp/ohos-sdk.org/ohos-sdk_26.0.0.18/` | Huawei official |
+| C/C++ Compiler | `/data/service/hnp/bin/aarch64-unknown-linux-ohos-clang++` | OHOS SDK |
 | Fortran | `~/.local/gfortran/bin/gfortran` | [gfortran-harmonyos](https://github.com/sxgou/gfortran-harmonyos) |
-| Java | `/data/service/hnp/bishengjdk17.0.13_06.org/` | 华为官方 |
-| lld 包装器 | `~/.local/bin/ohos-lld-wrapper` | 本指南第 1 步创建 |
+| Java | `/data/service/hnp/bishengjdk17.0.13_06.org/` | Huawei official |
+| lld wrapper | `~/.local/bin/ohos-lld-wrapper` | Created in Step 1 |
 | harmonybrew | `~/.harmonybrew/` | [Harmonybrew](https://gitcode.com/Harmonybrew/homebrew-harmony) |
-| OpenBLAS | harmonybrew 提供 | [openblas-harmonyos](https://github.com/sxgou/openblas-harmonyos) |
+| OpenBLAS | Provided by harmonybrew | [openblas-harmonyos](https://github.com/sxgou/openblas-harmonyos) |
 
-### 依赖库
+### Dependency Libraries
 
-由 harmonybrew 提供：pcre2, curl, bzip2, xz, openssl@3, libffi, openblas, readline, ncurses, libpng, freetype, cairo, libxml2, expat, pixman, fontconfig, harfbuzz, fribidi, gmp, pango, cmake, ninja, libtiff, pkgconf, autoconf, automake, bison, flex, sccache, libgit2, libsodium, proj, webp, giflib, mpfr
+Provided by harmonybrew: pcre2, curl, bzip2, xz, openssl@3, libffi, openblas, readline, ncurses, libpng, freetype, cairo, libxml2, expat, pixman, fontconfig, harfbuzz, fribidi, gmp, pango, cmake, ninja, libtiff, pkgconf, autoconf, automake, bison, flex, sccache, libgit2, libsodium, proj, webp, giflib, mpfr
 
-手动编译（`~/.local/R-deps`）：fftw3, zeromq, ANN, glpk
-
----
-
-## 构建步骤
-
-```
-Prerequisites (Step 1)              — 工具链准备
-       │
-  Step 2: build-deps.sh             — 安装依赖库
-       │
-  Step 3: tar xzf R-X.Y.Z.tar.gz   — 解压所需版本的 R 源码
-       │
-  Step 4: apply-patches.sh [版本]   — 打补丁（可跳过，Step 5 自动执行）
-       │
-  Step 5: configure-R.sh [版本]     — 配置（自动调用 apply-patches.sh）
-       │
-  Step 6: cd build && make...       — 编译
-       │
-  Step 7: make install              — 安装
-       │
-  Step 8: post-install-R.sh [版本]  — 安装后处理
-```
+Manually compiled (`~/.local/R-deps`): fftw3, zeromq, ANN, glpk
 
 ---
 
-### 第 1 步：准备工具链
+## Build Steps
 
-确保以下工具链已就绪：
+```
+Prerequisites (Step 1)              — Toolchain preparation
+       │
+  Step 2: build-deps.sh             — Install dependency libraries
+       │
+  Step 3: tar xzf R-X.Y.Z.tar.gz   — Extract R source for desired version
+       │
+  Step 4: apply-patches.sh [version] — Apply patches (optional, Step 5 auto-runs)
+       │
+  Step 5: configure-R.sh [version]  — Configure (auto-runs apply-patches.sh)
+       │
+  Step 6: cd build && make...       — Compile
+       │
+  Step 7: make install              — Install
+       │
+  Step 8: post-install-R.sh [version] — Post-install processing
+```
+
+---
+
+### Step 1: Prepare Toolchain
+
+Ensure the following toolchain components are ready:
 
 ```bash
-# OHOS SDK — 检查 clang 可用
+# OHOS SDK — verify clang is available
 aarch64-unknown-linux-ohos-clang --version
 
-# gfortran 交叉编译器（从以下项目获取）
+# gfortran cross-compiler (get from project below)
 #   https://github.com/sxgou/gfortran-harmonyos
 ~/.local/gfortran/bin/gfortran --version
 
 # BiSheng JDK 17
 java -version
 
-# lld 包装器 — 见下方说明
+# lld wrapper — see instructions below
 ~/.local/bin/ohos-lld-wrapper --help
 ```
 
-**获取各工具链**：
+**Obtaining each component**:
 
-| 组件 | 获取方式 |
-|------|----------|
-| OHOS SDK + Clang | 华为官方分发，或 DevEco Studio 自带 |
-| gfortran 交叉编译器 | 从 [gfortran-harmonyos](https://github.com/sxgou/gfortran-harmonyos) 下载预编译包，解压到 `~/.local/gfortran/` |
-| BiSheng JDK 17 | 华为官方分发 |
-| harmonybrew | 从 [Harmonybrew](https://gitcode.com/Harmonybrew/homebrew-harmony) 安装，提供 pcre2、curl、cairo、openblas 等依赖库 |
-| OpenBLAS | harmonybrew 自带，或从 [openblas-harmonyos](https://github.com/sxgou/openblas-harmonyos) 自行编译 |
+| Component | How to Get |
+|-----------|-----------|
+| OHOS SDK + Clang | Huawei official distribution, or bundled with DevEco Studio |
+| gfortran cross-compiler | Download prebuilt package from [gfortran-harmonyos](https://github.com/sxgou/gfortran-harmonyos), extract to `~/.local/gfortran/` |
+| BiSheng JDK 17 | Huawei official distribution |
+| harmonybrew | Install from [Harmonybrew](https://gitcode.com/Harmonybrew/homebrew-harmony), provides pcre2, curl, cairo, openblas and other dependencies |
+| OpenBLAS | Bundled with harmonybrew, or build from [openblas-harmonyos](https://github.com/sxgou/openblas-harmonyos) |
 
-**lld 包装器**：必须安装 `~/.local/bin/ohos-lld-wrapper`，内容如下：
+**lld wrapper**: Must install `~/.local/bin/ohos-lld-wrapper` with the following content:
 
 ```sh
 #!/bin/sh
@@ -117,26 +117,26 @@ export LD_LIBRARY_PATH="${LLVM_LIB}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec -a "ld.lld" "$LLVM_LIB/../bin/lld" --code-sign "$@"
 ```
 
-此包装器解决两个关键问题：
-1. **musl 不支持 `$ORIGIN`** — lld 自身 RUNPATH 设为 `$ORIGIN/../lib` 指向 OHOS LLVM lib，但 musl ld.so 忽略此标记，导致 lld 运行时找不到自己的 libxml2.so.16。包装器通过 `LD_LIBRARY_PATH` 显式指定 LLVM lib 路径。
-2. **hmdfs 要求 `.codesign` 段** — 仅 lld 的 `--code-sign` 自动生成此段，bfd 链接器无法生成。
+This wrapper solves two critical problems:
+1. **musl does not support `$ORIGIN`** — lld has RUNPATH set to `$ORIGIN/../lib` pointing to OHOS LLVM lib, but musl ld.so ignores this, leaving lld unable to find its own libxml2.so.16 at runtime. The wrapper explicitly sets `LD_LIBRARY_PATH` to the LLVM lib path.
+2. **hmdfs requires `.codesign` section** — only lld's `--code-sign` generates this section automatically; bfd linker cannot produce it.
 
 ---
 
-### 第 2 步：安装 R 依赖库
+### Step 2: Install R Dependency Libraries
 
-**方式 A — 自动安装（推荐）**：
+**Option A — Automatic installation (recommended)**:
 
 ```bash
 bash build-deps.sh
 ```
 
-此脚本自动执行：
-- `brew install bzip2 xz pcre2 curl libpng freetype cairo ...`（所有 brew 可用依赖，含 pango/cmake/ninja 等构建工具）
-- 创建 `~/.local/R-deps/` 目录（用于尚未进入 brew 的库）
-- 验证关键库文件是否存在
+This script automatically:
+- Runs `brew install bzip2 xz pcre2 curl libpng freetype cairo ...` (all brew-available dependencies, including pango/cmake/ninja build tools)
+- Creates `~/.local/R-deps/` directory (for libraries not yet in brew)
+- Verifies key library files exist
 
-**方式 B — 手动安装**：
+**Option B — Manual installation**:
 
 ```bash
 brew install bzip2 xz pcre2 curl openssl libpng freetype cairo \
@@ -145,231 +145,231 @@ brew install bzip2 xz pcre2 curl openssl libpng freetype cairo \
   sccache libgit2 libsodium proj webp giflib mpfr
 ```
 
-非 brew 库（fftw3, zeromq, ANN, glpk）需要手动交叉编译，安装到 `~/.local/R-deps/`。
+Non-brew libraries (fftw3, zeromq, ANN, glpk) must be cross-compiled manually and installed to `~/.local/R-deps/`.
 
 ---
 
-### 第 3 步：下载并解压 R 源码
+### Step 3: Download and Extract R Source
 
-选择你想要的 R 版本。当前支持 4.4.3 和 4.6.0：
+Choose the R version you want. Currently supports 4.4.3 and 4.6.0:
 
 ```bash
-# 下载 R 4.4.3
+# Download R 4.4.3
 curl -L https://cran.r-project.org/src/base/R-4/R-4.4.3.tar.gz | tar xz -C src/
 
-# 或者下载 R 4.6.0
+# Or download R 4.6.0
 curl -L https://cran.r-project.org/src/base/R-4/R-4.6.0.tar.gz | tar xz -C src/
 ```
 
-解压后目录结构：
+After extraction, the directory structure:
 
 ```
-src/R-X.Y.Z/        ← R 原始源码（由后续脚本打补丁并编译）
+src/R-X.Y.Z/        ← Original R source (will be patched and compiled by subsequent scripts)
 ```
 
 ---
 
-### 第 4 步：对 R 源码打 HarmonyOS 补丁
+### Step 4: Apply HarmonyOS Patches to R Source
 
 ```bash
-# 默认对 R 4.4.3 打补丁
+# Default: apply patches for R 4.4.3
 bash apply-patches.sh
 
-# 也可指定版本，例如 R 4.6.0
+# Or specify a version, e.g. R 4.6.0
 bash apply-patches.sh 4.6.0
 ```
 
-此脚本从 `versions/<版本>/patches/` 读取补丁，对 `src/R-<版本>/` 中的原始源码执行以下操作：
+This script reads patches from `versions/<version>/patches/` and applies the following to the original source in `src/R-<version>/`:
 
-- 应用 **补丁文件**（修改现有 R 源码，各版本数量不同）
-  - 4.4.3 / 4.6.0：2 个公共补丁
-  - 4.5.2：4 个补丁（2 个公共 + 2 个版本特定）
-- 复制 **2 个新增文件**（ohos_stubs.c + Makefile.in）到 `src/extra/ohos_stubs/`
-- 运行 **内联 python 修复**（仅 4.5.2：6 个额外修复解决 R 4.5.2 特有的头文件重组问题）
+- Applies **patch files** (modifies existing R source; count varies by version)
+  - 4.4.3 / 4.6.0: 2 common patches
+  - 4.5.2: 4 patches (2 common + 2 version-specific)
+- Copies **2 new files** (ohos_stubs.c + Makefile.in) to `src/extra/ohos_stubs/`
+- Runs **inline python fixes** (4.5.2 only: 6 additional fixes for R 4.5.2-specific header reorganization)
 
-补丁覆盖范围：
+Patch coverage:
 
-| 补丁文件 | 修改内容 | 4.4.3 | 4.5.2 | 4.6.0 |
-|----------|----------|-------|-------|-------|
-| `etc-ldpaths.in.patch` | LD_PRELOAD 注入 libohos_stubs.so；LD_LIBRARY_PATH 加入 brew/lib 以优先使用 zlib-ng-compat | ✓ | ✓ | ✓ |
-| `src-unix-Rscript.c.patch` | execv() 失败时 dlopen("libR.so") 直接调用 Rf_initialize_R + Rf_mainloop（绕过 seccomp execv 封锁） | ✓ | ✓ | ✓ |
-| `namespace-assignNativeRoutines.patch` | 修复 `assignNativeRoutines` 中 `if(exists(...))` 跳过已存在绑定问题。惰性加载的 `C_*` 变量（EXTPTRSXP 序列化后为 NULL）不会被 `.Call` 注册覆盖，导致所有 `C_*` 调用失败 | ✗ | ✗ | ✓ |
-| `Rmath.h0.in.patch` | 给 `#define log1p Rlog1p` 添加 `#ifndef __cplusplus` 保护，防止 C++ 编译时 `::log1p` 被宏展开为 `::Rlog1p` 导致编译错误（影响 Rcpp、Armadillo 等 C++ 包） | ✓ | ✓ | ✓ |
-| `src-extra-Makefile.in-ohos_stubs.patch` | 将 ohos_stubs 加入 `src/extra/Makefile.in` 的 SUBDIRS，使 libohos_stubs.so 作为标准 make 流程的一部分自动构建 | ✗ | ✓ | ✗ |
-| `etc-ldpaths.in-LD_PRELOAD.patch` | 在 ldpaths.in 模板中嵌入 LD_PRELOAD 配置，使 libohos_stubs.so 在每次 R 启动时自动预加载 | ✗ | ✓ | ✗ |
-| `configure-umask.patch` | configure 创建临时目录时使用 `umask 022` 而非 `umask 077`，避免 hmdfs 上 0700 权限导致 Permission denied（问题 #3） | ✗ | ✗ | ✓ |
-| `tools-copy-if-change.patch` | `copy-if-change` 用 `rm -f && cp` 替代 `cp -f`，避免 hmdfs 覆盖已有文件失败（问题 #4） | ✗ | ✗ | ✓ |
-| `Makefile.in-install-rm.patch` | `install-libR-exists` 在 `$(INSTALL_DATA)` 前先 `rm -f`，避免 hmdfs 覆盖 `libR.so` 失败（问题 #4） | ✗ | ✗ | ✓ |
+| Patch File | Modification | 4.4.3 | 4.5.2 | 4.6.0 |
+|-----------|-------------|-------|-------|-------|
+| `etc-ldpaths.in.patch` | LD_PRELOAD injects libohos_stubs.so; add brew/lib to LD_LIBRARY_PATH for zlib-ng-compat priority | ✓ | ✓ | ✓ |
+| `src-unix-Rscript.c.patch` | On execv() failure, dlopen("libR.so") and call Rf_initialize_R + Rf_mainloop directly (bypass seccomp execv blockade) | ✓ | ✓ | ✓ |
+| `namespace-assignNativeRoutines.patch` | Fix `assignNativeRoutines` where `if(exists(...))` skips existing bindings. Lazy-loaded `C_*` variables (EXTPTRSXP serialized as NULL) get overwritten by `.Call` registration, breaking all `C_*` calls | ✗ | ✗ | ✓ |
+| `Rmath.h0.in.patch` | Wrap `#define log1p Rlog1p` in `#ifndef __cplusplus` guard to prevent `::log1p` from being macro-expanded to `::Rlog1p` in C++ (affects Rcpp, Armadillo, etc.) | ✓ | ✓ | ✓ |
+| `src-extra-Makefile.in-ohos_stubs.patch` | Add ohos_stubs to SUBDIRS in `src/extra/Makefile.in` so libohos_stubs.so builds automatically as part of the standard make flow | ✗ | ✓ | ✗ |
+| `etc-ldpaths.in-LD_PRELOAD.patch` | Embed LD_PRELOAD configuration in ldpaths.in template so libohos_stubs.so auto-loads on every R startup | ✗ | ✓ | ✗ |
+| `configure-umask.patch` | Use `umask 022` instead of `umask 077` when configure creates temp directories, avoiding Permission denied on hmdfs with 0700 permissions (issue #3) | ✗ | ✗ | ✓ |
+| `tools-copy-if-change.patch` | `copy-if-change` uses `rm -f && cp` instead of `cp -f` to avoid hmdfs overwrite failures (issue #4) | ✗ | ✗ | ✓ |
+| `Makefile.in-install-rm.patch` | `install-libR-exists` does `rm -f` before `$(INSTALL_DATA)` to avoid hmdfs overwrite failure of `libR.so` (issue #4) | ✗ | ✗ | ✓ |
 
-R 4.5.2 特有的内联 python 修复（集成在 `apply-patches.sh` 中）：
+R 4.5.2-specific inline python fixes (integrated into `apply-patches.sh`):
 
-| 修复目标 | 解决 |
-|----------|------|
-| `src/include/Rmath.h0.in` | 移除包裹 Rlog1p 声明的 `extern "C"`（在 C 模式下冲突）|
-| `src/main/eval.c` | 添加 Rlog1p 前向声明（Rmath.h 不再声明它）|
-| `src/include/Defn.h` | 添加 Rf_allocVector3 前向声明（R 4.5.2 缺失 R 4.6.0 已有的声明）|
-| `src/include/Defn.h` | 添加 R_popen/R_system 无条件声明（R 4.5.2 将它们放在 HAVE_POPEN 条件之后）|
-| `src/library/tools/src/gramRd.y` | 添加 ENABLE_LEGACY_NONAPI 定义（使 Rf_findVar 等可见）|
-| `src/library/stats/src/distance.c` | 添加 R_ext/MathThreads.h 头文件包含 |
+| Fix Target | Resolution |
+|-----------|-----------|
+| `src/include/Rmath.h0.in` | Remove `extern "C"` wrapping Rlog1p declaration (conflicts in C mode) |
+| `src/main/eval.c` | Add Rlog1p forward declaration (Rmath.h no longer declares it) |
+| `src/include/Defn.h` | Add Rf_allocVector3 forward declaration (missing in R 4.5.2, present in R 4.6.0) |
+| `src/include/Defn.h` | Add unconditional R_popen/R_system declarations (R 4.5.2 places them behind HAVE_POPEN conditional) |
+| `src/library/tools/src/gramRd.y` | Add ENABLE_LEGACY_NONAPI define (makes Rf_findVar etc. visible) |
+| `src/library/stats/src/distance.c` | Add R_ext/MathThreads.h include |
 
-> **注意**：原有的 9–13 个 zlib 压缩变通补丁和 2 个无实际效果的补丁（baseloader.R、gzio.h）已被删除。这些补丁在 R 因加载 OHOS SDK 的 libz.so 而触发 seccomp 封锁时用于绕过压缩接口限制。自 `zlib-ng-compat`（brew）替代 SDK libz 后，所有压缩/解压接口正常工作，不再需要任何变通。
+> **Note**: The original 9–13 zlib compression workaround patches and 2 ineffective patches (baseloader.R, gzio.h) have been removed. These patches worked around compression interface restrictions when R loaded OHOS SDK's libz.so, which triggered seccomp. Since switching to `zlib-ng-compat` (brew) instead of SDK libz, all compression/decompression interfaces work normally without any workarounds.
 >
-> 对于 R 4.5.2，libohos_stubs.so 的构建集成在 R 构建系统中（通过 `src/extra/Makefile.in` 中的 SUBDIRS 条目和 `src/extra/ohos_stubs/Makefile.in`）。`etc/ldpaths.in` 中嵌入了 `LD_PRELOAD` 注入，使 libohos_stubs.so 在每次 R 启动时自动预加载。
+> For R 4.5.2, libohos_stubs.so build is integrated into the R build system (via SUBDIRS entry in `src/extra/Makefile.in` and `src/extra/ohos_stubs/Makefile.in`). The `LD_PRELOAD` injection is embedded in `etc/ldpaths.in`, so libohos_stubs.so auto-loads on every R startup.
 
-**注意**：此步骤也可跳过——第 5 步的 `configure-R.sh` 会自动调用 `apply-patches.sh`。单独运行适用于提前查看补丁效果或在修改补丁后单独测试。
+**Note**: This step can be skipped — Step 5's `configure-R.sh` automatically calls `apply-patches.sh`. Running it separately is useful for previewing patch effects or testing after modifying patches.
 
 ---
 
-### 第 5 步：配置 R 构建
+### Step 5: Configure R Build
 
 ```bash
-# 默认配置 R 4.4.3
+# Default: configure R 4.4.3
 bash configure-R.sh
 
-# 也可指定版本，例如 R 4.6.0
+# Or specify a version, e.g. R 4.6.0
 bash configure-R.sh 4.6.0
 ```
 
-此脚本完成以下工作：
+This script performs the following:
 
-1. **自动调用 `apply-patches.sh <版本>`**（如果尚未打补丁）
-2. **清理** `build/` 目录中的 `config.cache` 和 `config.status`
-3. **设置环境变量**（PKG_CONFIG_PATH 指向 brew 和 R-deps，LD_LIBRARY_PATH 指向 OHOS LLVM lib 和 gfortran）
-4. **预配置缓存变量**（约 35 个 `r_cv_*` / `ac_cv_*` 变量，跳过因 seccomp 限制无法运行的运行时测试）
-5. **运行 `src/R-<版本>/configure`** 并传递所有 HarmonyOS 交叉编译参数
-6. **修补 `config.status`**（修复 HarmonyOS toybox 的兼容性问题：umask 077 + mktemp 失败，ksh `print -r --` bash 不支持）
-7. **重新运行 `config.status`** 生成最终的 Makefile
+1. **Auto-runs `apply-patches.sh <version>`** (if patches haven't been applied yet)
+2. **Cleans** `config.cache` and `config.status` from the `build/` directory
+3. **Sets environment variables** (PKG_CONFIG_PATH pointing to brew and R-deps, LD_LIBRARY_PATH pointing to OHOS LLVM lib and gfortran)
+4. **Pre-seeds cache variables** (~35 `r_cv_*` / `ac_cv_*` variables to skip runtime tests blocked by seccomp)
+5. **Runs `src/R-<version>/configure`** with all HarmonyOS cross-compilation parameters
+6. **Patches `config.status`** (fixes HarmonyOS toybox compatibility: umask 077 + mktemp failure, ksh `print -r --` not supported by bash)
+7. **Re-runs `config.status`** to generate final Makefile
 
-关键配置选项：
+Key configuration options:
 
 ```
---host=aarch64-pc-linux-musl      # 交叉编译目标（实际对应 aarch64-linux-ohos）
---enable-R-shlib                   # 构建 libR.so（必需，hmdfs 不支持静态链接）
---with-readline                    # readline 交互支持
---with-blas=-lopenblas             # OpenBLAS（SIMD 优化）
+--host=aarch64-pc-linux-musl      # Cross-compilation target (maps to aarch64-linux-ohos)
+--enable-R-shlib                   # Build libR.so (required, hmdfs does not support static linking)
+--with-readline                    # readline interactive support
+--with-blas=-lopenblas             # OpenBLAS (SIMD optimized)
 --with-lapack                      # OpenBLAS LAPACK
 --enable-java                      # BiSheng JDK 17
---without-x                        # X11 不可用（brew 无 libXt）
---without-tcltk                    # 无 Tcl/Tk
+--without-x                        # X11 unavailable (brew has no libXt)
+--without-tcltk                    # No Tcl/Tk
 ```
 
 ---
 
-### 第 6 步：编译
+### Step 6: Compile
 
 ```bash
 cd build && make && make R
 ```
 
-各阶段说明：
-- `make`：编译 R 核心 C/Fortran 代码和 libR.so
-- `make R`：生成 R 主二进制（PIE）和 Rscript
+Stage details:
+- `make`: Compiles R core C/Fortran code and libR.so
+- `make R`: Generates the R main binary (PIE) and Rscript
 
-编译时需注意：
-- **编译全部 15 个 base 包**：`make` 会自动编译
-- **Makeconf 一致性**：`build/Makeconf` 和 `build/etc/Makeconf` 必须同步（由 configure 生成）。如果修改了配置，需重新运行 `configure-R.sh`
-- **两个 Makeconf 文件**：如果手动修改其中一个，必须同步到另一个，否则 make 会使用过时的配置
+Notes:
+- **All 15 base packages** are compiled automatically by `make`
+- **Makeconf consistency**: `build/Makeconf` and `build/etc/Makeconf` must stay in sync (generated by configure). If you modify configuration, re-run `configure-R.sh`
+- **Two Makeconf files**: If you manually modify one, you must sync to the other, otherwise make will use stale configuration
 
 ---
 
-### 第 7 步：安装
+### Step 7: Install
 
 ```bash
 make install
 ```
 
-安装到 `--prefix` 指定的目录（`~/.local/R/`），结果如下：
+Installs to `--prefix` directory (`~/.local/R/`), result:
 
-| 组件 | 路径 |
-|------|------|
+| Component | Path |
+|-----------|------|
 | R Home | `~/.local/R/lib/R/` |
-| R 二进制 | `~/.local/R/lib/R/bin/exec/R` |
+| R Binary | `~/.local/R/lib/R/bin/exec/R` |
 | libR.so | `~/.local/R/lib/R/lib/libR.so` |
-| Base 包 | `~/.local/R/lib/R/library/*/` |
-| 包装脚本 | `~/.local/R/lib/R/bin/R` |
+| Base Packages | `~/.local/R/lib/R/library/*/` |
+| Wrapper Script | `~/.local/R/lib/R/bin/R` |
 
-**注意**：hmdfs 不允许覆盖已存在的文件。`tools/copy-if-change` 已通过补丁自动在安装前执行 `rm -f`（见 `tools-copy-if-change.patch`），`Makefile.in` 中 `install-libR-exists` 目标也已修复。如需重新安装，直接运行 `make install` 即可。
+**Note**: hmdfs does not allow overwriting existing files. The `tools/copy-if-change` script has been patched to automatically `rm -f` before installation (see `tools-copy-if-change.patch`), and the `install-libR-exists` target in `Makefile.in` has also been fixed. To reinstall, simply run `make install` again.
 
 ---
 
-### 第 8 步：安装后处理
+### Step 8: Post-Install Processing
 
-运行一键安装后处理脚本（生成 methods 懒加载库、NEWS.rds、验证完整性）：
+Run the one-click post-install script (generates methods lazy-load database, NEWS.rds, verifies integrity):
 
 ```bash
 bash post-install-R.sh
 ```
 
-此脚本自动完成：
+This script automatically:
 
-1. **编译 libohos_stubs.so** — 从 `src/extra/ohos_stubs/ohos_stubs.c` 编译并安装到 `$R_HOME/lib/`，补齐 OHOS libc 裁剪符号。
-2. **生成 methods 包懒加载数据库** — 生成 `library/methods/R/methods`、`methods.rdb` (963 KB)、`methods.rdx` (23 KB)。stats4 等依赖 methods 的包需要此文件，否则加载失败。
-3. **生成 NEWS.rds / NEWS.2.rds / NEWS.3.rds** — 如果 `make install` 未自动生成，从 `NEWS.Rd` 编译。
-4. **修复 CC17/CC23** — 交叉编译后 Makeconf 中 CC17/CC23 为空，导致请求 C17 标准的包（如 locfit）编译失败。此步骤将 CC17/CC23 设为 OHOS clang 完整路径。
-5. **配置用户 R 环境** — 自动创建 `~/.Rprofile`，包含：
-   - `TMPDIR` 设为 hmfs 路径（避免 hmdfs 限制导致 configure 脚本失败）
-   - `harmony_install()` 辅助函数，自动处理 `--host` 和 `--no-test-load`
-   - Rcpp 安装后自动修补 `undoRmath.h`（解决 `log1p` 宏冲突）
-   - `TMPDIR` 环境变量自动追加到 `~/.bashrc`
-6. **验证安装完整性** — 检查 R 二进制、libR.so、libohos_stubs.so 以及 base/methods/stats 等关键包是否就位。
+1. **Builds libohos_stubs.so** — compiles from `src/extra/ohos_stubs/ohos_stubs.c` and installs to `$R_HOME/lib/`, filling in missing OHOS libc symbols.
+2. **Generates methods package lazy-load database** — creates `library/methods/R/methods`, `methods.rdb` (963 KB), `methods.rdx` (23 KB). Required by packages depending on methods (e.g. stats4).
+3. **Generates NEWS.rds / NEWS.2.rds / NEWS.3.rds** — compiled from `NEWS.Rd` if `make install` did not produce them automatically.
+4. **Fixes CC17/CC23** — after cross-compilation, CC17/CC23 in Makeconf are empty, causing packages that request C17 standard (e.g. locfit) to fail. This step sets CC17/CC23 to the full OHOS clang path.
+5. **Configures user R environment** — auto-creates `~/.Rprofile` with:
+   - `TMPDIR` set to a hmfs path (avoids hmdfs restrictions causing configure scripts to fail)
+   - `harmony_install()` helper function, automatically handles `--host` and `--no-test-load`
+   - Auto-patches `undoRmath.h` after Rcpp installation (fixes `log1p` macro conflict)
+   - Appends `TMPDIR` environment variable to `~/.bashrc`
+6. **Verifies installation integrity** — checks R binary, libR.so, libohos_stubs.so, and key packages (base/methods/stats) are in place.
 
-脚本可在项目根目录重复运行（已存在的步骤自动跳过）。
+The script is idempotent — already completed steps are automatically skipped.
 
 ---
 
-## 使用
+## Usage
 
-R 安装后通过包装脚本启动：
+Start R via the wrapper script:
 
 ```bash
 ~/.local/R/lib/R/bin/R                          # R REPL
-~/.local/R/lib/R/bin/R -e 'print(1+1)'          # 运行表达式
+~/.local/R/lib/R/bin/R -e 'print(1+1)'          # Run expression
 ~/.local/R/lib/R/bin/R --vanilla -e \
   'install.packages("jsonlite", repos="https://cloud.r-project.org")'
 ```
 
-**注意**：早期版本中 `Rscript` 因 seccomp 阻止 `execv()` 不可用。自补丁 #18（`src/unix/Rscript.c`）起，Rscript 通过 `dlopen("libR.so")` 直接调用 `Rf_initialize_R` + `Rf_mainloop` 变通实现，现已正常工作。
+**Note**: In earlier versions, `Rscript` was unusable because seccomp blocked `execv()`. Starting from patch #18 (`src/unix/Rscript.c`), Rscript works by using `dlopen("libR.so")` to directly call `Rf_initialize_R` + `Rf_mainloop` as a workaround.
 
 ---
 
-## 安装 R 包
+## Installing R Packages
 
-### 推荐方式：`harmony_install()`
+### Recommended: `harmony_install()`
 
-运行 `post-install-R.sh` 后，`~/.Rprofile` 中定义了 `harmony_install()` 辅助函数，自动处理 HarmonyOS 特有的配置问题：
+After running `post-install-R.sh`, the `harmony_install()` helper function is defined in `~/.Rprofile`, automatically handling HarmonyOS-specific configuration:
 
 ```r
-# 安装单个包（自动加 --host=aarch64-linux-ohos）
+# Install a single package (auto-adds --host=aarch64-linux-ohos)
 harmony_install("jsonlite")
 
-# 批量安装
+# Batch installation
 harmony_install(c("dplyr", "ggplot2", "Seurat"))
 
-# 指定镜像
+# Specify a mirror
 harmony_install("Seurat", repos = "https://mirrors.tuna.tsinghua.edu.cn/CRAN")
 
-# Bioconductor 包（自动安装 BiocManager + 传递 HarmonyOS 参数）
+# Bioconductor packages (auto-installs BiocManager + passes HarmonyOS args)
 harmony_install("DESeq2", bioc = TRUE)
 harmony_install(c("edgeR", "limma"), bioc = TRUE)
 
-# GitHub 包（自动安装 remotes + 传递 HarmonyOS 参数）
-# 注意：必须用 "owner/repo" 格式，不要只用包名，否则可能匹配多个仓库
+# GitHub packages (auto-installs remotes + passes HarmonyOS args)
+# Note: must use "owner/repo" format, not just package name, to avoid ambiguous matches
 harmony_install("satijalab/seurat-wrappers", github = TRUE)
 harmony_install("chris-mcginnis-ucsf/DoubletFinder", github = TRUE)
 ```
 
-`harmony_install()` 自动完成以下工作：
+`harmony_install()` automatically handles:
 
-| 问题 | 自动处理方式 |
-|------|-------------|
-| configure 无法执行测试程序（SELinux 封锁） | 传递 `configure.args = "--host=aarch64-linux-ohos"` |
-| hmdfs 临时文件限制 | 使用 `TMPDIR=/data/storage/el4/base/R-build`（hmfs） |
-| Rcpp `undoRmath.h` 缺少 `#undef log1p` | Rcpp 安装后自动检测并修补 |
-| 包安装后加载测试可能失败 | 传递 `INSTALL_opts = "--no-test-load"` |
+| Problem | Automatic Handling |
+|---------|-------------------|
+| configure cannot run test programs (SELinux blocked) | Passes `configure.args = "--host=aarch64-linux-ohos"` |
+| hmdfs temp file restrictions | Uses `TMPDIR=/data/storage/el4/base/R-build` (hmfs) |
+| Rcpp `undoRmath.h` missing `#undef log1p` | Auto-detects and patches after Rcpp installation |
+| Package install test-load may fail | Passes `INSTALL_opts = "--no-test-load"` |
 
-### 手动方式（`--vanilla` 模式）
+### Manual Mode (`--vanilla`)
 
-如果习惯用 `--vanilla` 启动 R（跳过 `.Rprofile`），需要手动传参：
+If you prefer to start R with `--vanilla` (skipping `.Rprofile`), pass the parameters manually:
 
 ```r
 install.packages("Seurat",
@@ -378,15 +378,15 @@ install.packages("Seurat",
     INSTALL_opts = "--no-test-load")
 ```
 
-### Seurat 安装
+### Installing Seurat
 
-Seurat 5.5.0 已在 HarmonyOS 上完整验证：
+Seurat 5.5.0 has been fully verified on HarmonyOS:
 
 ```r
 harmony_install("Seurat")
 ```
 
-验证核心流程：
+Verify the core workflow:
 
 ```r
 library(Seurat)
@@ -400,185 +400,183 @@ obj <- FindClusters(obj, verbose = FALSE)
 obj <- RunUMAP(obj, dims = 1:10, verbose = FALSE)
 ```
 
-
-
 ---
 
-## 已知问题与修复
+## Known Issues and Fixes
 
-### 1. R 启动崩溃 — "could not find function 'file'"
+### 1. R Startup Crash — "could not find function 'file'"
 
-**现象**: R 启动时立即崩溃，报 base 函数 `file()` 未定义。
+**Symptom**: R crashes immediately at startup with an error that base function `file()` is not defined.
 
-**文件**: `src/library/base/baseloader.R`
+**File**: `src/library/base/baseloader.R`
 
-**根因**: `readRDS` 的参数名为 `file`，函数体内又调用 `file(file, "rb")`。参数 `file` 遮蔽了 base 包中的 `file()` 函数。更关键的是，在 base 包懒加载阶段，`file()` 这个非原语函数尚未定义——base 包自己还没加载完成。
+**Root Cause**: `readRDS` has a parameter named `file`, and its body calls `file(file, "rb")`. The parameter `file` shadows the `file()` function from the base package. Critically, during base package lazy-loading, `file()` — a non-primitive function — hasn't been defined yet because base itself hasn't finished loading.
 
-**修复**: 参数重命名为 `filepath`，并将 `file(filepath, "rb")` 替换为 `.Internal(file(filepath, "rb", TRUE, "", "default", FALSE))`，直接调用 C 层实现，不依赖 R 包装函数。
+**Fix**: Renamed the parameter to `filepath`, and replaced `file(filepath, "rb")` with `.Internal(file(filepath, "rb", TRUE, "", "default", FALSE))`, calling the C-level implementation directly without relying on the R wrapper function.
 
-### 2. methods 包懒加载数据库缺失
+### 2. Missing methods Package Lazy-Load Database
 
-详见第 8a 步。
+See Step 8a for details.
 
-### 3. LD_LIBRARY_PATH 导致启动失败 — "promise already under evaluation"
+### 3. LD_LIBRARY_PATH Causes Startup Failure — "promise already under evaluation"
 
-**现象**: R 通过包装脚本启动时报错 "promise already under evaluation"，直接执行 `bin/exec/R` 正常。
+**Symptom**: R errors with "promise already under evaluation" when started via the wrapper script; running `bin/exec/R` directly works fine.
 
-**文件**: `etc/ldpaths.in`
+**File**: `etc/ldpaths.in`
 
-**根因**: configure 从 `LDFLAGS` 的 `-L` 参数收集路径写入 `ldpaths`，这些路径包括 OHOS SDK sysroot、gfortran、harmonybrew 等。包装脚本 `bin/R` 在启动 R 前 source `ldpaths`，将 sysroot 路径加入 `LD_LIBRARY_PATH`。动态链接器优先搜索这些路径时加载了 OHOS SDK 的 libc，与构建宿主机的 musl 环境不兼容，导致 R 懒加载期间内部状态不一致。
+**Root Cause**: configure collects paths from `-L` flags in `LDFLAGS` and writes them to `ldpaths`. These include OHOS SDK sysroot, gfortran, harmonybrew paths, etc. The wrapper script `bin/R` sources `ldpaths` before starting R, adding sysroot paths to `LD_LIBRARY_PATH`. The dynamic linker loads OHOS SDK's libc when searching these paths first, which is incompatible with the build host's musl environment, causing internal state inconsistency during R lazy-loading.
 
-**修复**: `ldpaths.in` 中忽略 `@R_LD_LIBRARY_PATH@`，只保留 `${R_HOME}/lib`。所有依赖路径已通过 RPATH 编码在二进制中。
+**Fix**: `ldpaths.in` ignores `@R_LD_LIBRARY_PATH@`, keeping only `${R_HOME}/lib`. All dependency paths are already encoded in the binary via RPATH.
 
-### 4. `make install` 缺少 NEWS.rds
+### 4. `make install` Missing NEWS.rds
 
-详见第 8b 步。
+See Step 8b for details.
 
-### 5. `make install` 缺少 Rscript.1 man page
+### 5. `make install` Missing Rscript.1 Man Page
 
-**根因**: `help2man` 需要执行目标平台二进制来提取帮助信息，但交叉编译的 Rscript 无法在构建宿主机上运行（需要 HarmonyOS musl 动态链接器）。
+**Root Cause**: `help2man` needs to execute the target platform binary to extract help information, but the cross-compiled Rscript cannot run on the build host (requires HarmonyOS musl dynamic linker).
 
-**修复**: 创建最小 man page 存根。
+**Fix**: Create a minimal man page stub.
 
-### 6. ohos-lld-wrapper — musl $ORIGIN 不兼容
+### 6. ohos-lld-wrapper — musl $ORIGIN Incompatibility
 
-详见第 1 步中 lld 包装器的说明。
+See the lld wrapper description in Step 1 for details.
 
-### 7. hmdfs 文件系统限制
+### 7. hmdfs Filesystem Restrictions
 
-**现象**: 静态链接的 ELF 文件无法执行（EACCES），bfd 链接的 `.so` 文件 `dlopen()` 失败，strip 后的二进制无法运行。
+**Symptom**: Static-linked ELF files cannot execute (EACCES), bfd-linked `.so` files fail `dlopen()`, stripped binaries won't run.
 
-**根因**: HarmonyOS 的 hmdfs 分布式文件系统安全机制要求：
-- ELF Type 必须为 **DYN (Shared object file)**——即 PIE 可执行文件
-- 必须有 **`.codesign` section**：仅 lld 的 `--code-sign` 自动生成
-- 不能 strip：`llvm-strip` 在 hmdfs 上原地修改 ELF 时会破坏安全隔离上下文
+**Root Cause**: HarmonyOS hmdfs distributed filesystem security mechanisms require:
+- ELF Type must be **DYN (Shared object file)** — i.e., a PIE executable
+- Must have **`.codesign` section**: only lld's `--code-sign` generates this automatically
+- Cannot strip: `llvm-strip` modifying ELF in-place on hmdfs destroys the security isolation context
 
-**验证**:
+**Verification**:
 ```bash
 readelf -h binary | grep 'Type:'
 # Type: DYN (Shared object file)
 readelf -S binary | grep codesign
-# 应有 .codesign section
+# Should have a .codesign section
 ```
 
-### 8. OHOS libc 裁剪 — libohos_stubs 补齐库
+### 8. OHOS libc Truncation — libohos_stubs Shim Library
 
-**现象**: Rust 编译时或 R 包运行时遇到 `undefined symbol` 错误。
+**Symptom**: `undefined symbol` errors during Rust compilation or R package runtime.
 
-**根因**: OHOS 的 musl libc 是裁剪版，缺少部分标准符号。
+**Root Cause**: OHOS musl libc is a trimmed version, missing some standard symbols.
 
-**补齐方案**: `src/extra/ohos_stubs/ohos_stubs.c` 编译为两种形式：
+**Shim Solution**: `src/extra/ohos_stubs/ohos_stubs.c` is compiled in two forms:
 
-| 场景 | 方式 | 符号 |
-|------|------|------|
-| Rust 编译时静态链接 | `libohos_stubs.a` | `posix_spawn_file_actions_addchdir_np`（返回 ENOSYS），`__xpg_strerror_r`（转发 strerror_r） |
-| R 包运行时动态注入 | `libohos_stubs.so`（LD_PRELOAD） | 同上 + `pthread_setcanceltype`（返回 0），`pthread_cancel`（返回 0） |
+| Scenario | Method | Symbols |
+|----------|--------|---------|
+| Rust compile-time static link | `libohos_stubs.a` | `posix_spawn_file_actions_addchdir_np` (returns ENOSYS), `__xpg_strerror_r` (forwards to strerror_r) |
+| R package runtime dynamic injection | `libohos_stubs.so` (LD_PRELOAD) | Same + `pthread_setcanceltype` (returns 0), `pthread_cancel` (returns 0) |
 
-**LD_PRELOAD 注入方式**：`etc/ldpaths.in`（R 运行时配置文件模板）中嵌入了以下片段，configure 后生成到已安装的 `etc/ldpaths`，确保每次 R 启动时自动预加载：
+**LD_PRELOAD injection**: The `etc/ldpaths.in` template (R runtime config) embeds the following snippet, which after configure generates the installed `etc/ldpaths`, ensuring automatic preloading on every R startup:
 
 ```sh
 LD_PRELOAD="${R_HOME}/lib${R_ARCH}/libohos_stubs.so${LD_PRELOAD:+:${LD_PRELOAD}}"
 export LD_PRELOAD
 ```
 
-此机制使得 `cli`、`purrr` 等使用 `pthread_setcanceltype` 的 R 包能够正常运行，无需修改包源码。
+This mechanism allows R packages using `pthread_setcanceltype` (e.g., `cli`, `purrr`) to work without source modifications.
 
-### 9. OpenBLAS 集成
+### 9. OpenBLAS Integration
 
-R 配置时使用 `--with-blas="-lopenblas" --with-lapack`，libR.so 直接链接 libopenblas.so.0。1000x1000 矩阵乘法在 20 核 aarch64 上约 0.48s（~4.2 GFLOPs）。
+R is configured with `--with-blas="-lopenblas" --with-lapack`, so libR.so directly links libopenblas.so.0. 1000x1000 matrix multiplication takes ~0.48s (~4.2 GFLOPs) on a 20-core aarch64.
 
-### 10. `bin/exec/` 遗留文件导致多架构构建错误
+### 10. Stale Files in `bin/exec/` Causing Multi-Arch Build Errors
 
-`src/main/Makefile.in` 的 `install-bin` 目标已自动删除 `bin/exec/` 中的非 R 文件（R.bfd, test-exec, test-sh）。
+The `install-bin` target in `src/main/Makefile.in` automatically removes non-R files (R.bfd, test-exec, test-sh) from `bin/exec/`.
 
-### 11. gzfile 压缩导致 vignette 安装失败
+### 11. gzfile Compression Causes Vignette Installation Failure
 
-**修复**: `src/library/tools/R/admin.R` 中 `.install_package_vignettes3` 对 `readRDS` 添加了 fallback——读取原始字节后用 `memDecompress()` 解压 gzip，再用 `unserialize()` 解析。R 内置的 zlib 实现不依赖 `gzfile` 连接，可绕过 seccomp 限制。
+**Fix**: In `src/library/tools/R/admin.R`, `.install_package_vignettes3` adds a fallback for `readRDS` — reads raw bytes, decompresses with `memDecompress()`, then parses with `unserialize()`. R's built-in zlib implementation doesn't depend on `gzfile` connections, bypassing seccomp restrictions.
 
-### 12. seccomp 封锁所有 zlib 压缩接口
+### 12. seccomp Blocks All zlib Compression Interfaces
 
-**现象**: HarmonyOS seccomp 过滤器封锁了 OHOS SDK 自带 libz.so 中使用的自定义 syscall，导致：
-- 所有 `gzopen()` / `gzfile()` 连接调用失败
-- 所有 `saveRDS(compress=TRUE)` 调用失败（返回 `unknown input format`）
-- 所有 `makeLazyLoadDB(compress=TRUE)` 调用失败
-- 系统包安装时的 sysdata 压缩（R_compress1）失败
-- `memDecompress(type="gzip")` 内存解压失败
+**Symptom**: HarmonyOS seccomp filter blocks custom syscalls used by OHOS SDK's bundled libz.so, causing:
+- All `gzopen()` / `gzfile()` connection calls fail
+- All `saveRDS(compress=TRUE)` calls fail (returns `unknown input format`)
+- All `makeLazyLoadDB(compress=TRUE)` calls fail
+- System package sysdata compression (R_compress1) fails during installation
+- `memDecompress(type="gzip")` in-memory decompression fails
 
-**根因**: R 的 RUNPATH 中 OHOS SDK 路径（`/data/service/hnp/ohos-sdk.org/ohos-sdk_26.0.0.18/ohos/native/sysroot/usr/lib/aarch64-linux-ohos/`）优先于 brew 路径，导致运行时加载了 SDK 的 `libz.so`（触发 seccomp）而非 brew 的 `zlib-ng-compat`（使用标准 syscall）。
+**Root Cause**: R's RUNPATH has OHOS SDK path (`/data/service/hnp/ohos-sdk.org/ohos-sdk_26.0.0.18/ohos/native/sysroot/usr/lib/aarch64-linux-ohos/`) taking priority over brew path, causing the runtime to load SDK's `libz.so` (triggers seccomp) instead of brew's `zlib-ng-compat` (standard syscalls).
 
-**2026-06-02 更新**：通过 `etc/ldpaths` 将 brew lib 路径加入 `LD_LIBRARY_PATH`（musl 中 LD_LIBRARY_PATH 优先级高于 DT_RPATH），R 启动时自动加载 zlib-ng-compat 替代 SDK libz，所有压缩/解压接口恢复正常。具体修改：
+**2026-06-02 Update**: By adding brew lib path to `LD_LIBRARY_PATH` in `etc/ldpaths` (musl gives LD_LIBRARY_PATH higher priority than DT_RPATH), R loads zlib-ng-compat from brew instead of SDK libz on startup, restoring all compression/decompression interfaces. Specific change:
 
 ```bash
-# etc/ldpaths 中添加：
+# Added to etc/ldpaths:
 R_BREW_LIB="/storage/Users/currentUser/.harmonybrew/lib"
 : ${R_LD_LIBRARY_PATH=${R_BREW_LIB}:${R_HOME}/lib}
 ```
 
-**补丁清理说明**：原有的 13 个（4.6.0）/ 9 个（4.4.3）zlib 压缩变通补丁和 2 个无实际效果的补丁（baseloader.R、gzio.h）已全部删除。这些补丁在 R 因加载 OHOS SDK 的 libz.so 而触发 seccomp 封锁时用于绕过压缩接口限制，方式包括：
-- 将 `gzfile()` 替换为 `file()` 以绕过 gzopen 封锁
-- 将 `saveRDS(compress=TRUE)` 改为 `compress=FALSE` 以绕过 R_compress1 封锁
-- 在懒加载数据库构建中强制关闭压缩
-- 用外部 `gzip -dc` pipe 替代 `gzfile()` 读取
-- 对 `memDecompress()` 添加 tryCatch fallback
+**Patch cleanup note**: All 13 (4.6.0) / 9 (4.4.3) original zlib compression workaround patches and 2 ineffective patches (baseloader.R, gzio.h) have been removed. These patches worked around compression interface restrictions when R loaded OHOS SDK's libz.so which triggered seccomp, using methods such as:
+- Replacing `gzfile()` with `file()` to bypass gzopen blockade
+- Changing `saveRDS(compress=TRUE)` to `compress=FALSE` to bypass R_compress1 blockade
+- Forcing compression off in lazy-load database builds
+- Using external `gzip -dc` pipes instead of `gzfile()` reads
+- Adding tryCatch fallbacks for `memDecompress()`
 
-自 `zlib-ng-compat`（brew）替代 SDK libz 后，所有压缩/解压接口正常工作，不再需要任何变通。
+Since switching to `zlib-ng-compat` (brew) instead of SDK libz, all compression/decompression interfaces work normally without any workarounds.
 
-> 注：R 4.5.2 在公共补丁基础上额外增加了 2 个版本特定补丁（ohos_stubs 构建集成 + ldpaths.in LD_PRELOAD 注入），以及 6 个内联 python 修复。详见上方补丁覆盖范围表。
-
----
-
-## 构建产物
-
-| 产物 | 大小 | 说明 |
-|------|------|------|
-| libR.so | 3.2 MB | R 共享库 |
-| R.bin | 22 KB | R 主执行体 (PIE) |
-| Rscript | 24 KB | R 脚本前端 (PIE) |
-| methods.rdb | 963 KB | methods 包懒加载数据 |
-| methods.rdx | 23 KB | methods 包懒加载索引 |
-| internet.so | 72 KB | 网络模块 |
-| lapack.so | 47 KB | LAPACK C 包装 |
-| libRlapack.so | 1.7 MB | LAPACK Fortran 实现 |
-| libohos_stubs.so | — | libc 补齐库 |
+> Note: R 4.5.2 has 2 additional version-specific patches on top of the common patches (ohos_stubs build integration + ldpaths.in LD_PRELOAD injection), plus 6 inline python fixes. See the patch coverage table above.
 
 ---
 
-## 验证
+## Build Artifacts
+
+| Artifact | Size | Description |
+|----------|------|-------------|
+| libR.so | 3.2 MB | R shared library |
+| R.bin | 22 KB | R main binary (PIE) |
+| Rscript | 24 KB | R script frontend (PIE) |
+| methods.rdb | 963 KB | methods package lazy-load data |
+| methods.rdx | 23 KB | methods package lazy-load index |
+| internet.so | 72 KB | Network module |
+| lapack.so | 47 KB | LAPACK C wrappers |
+| libRlapack.so | 1.7 MB | LAPACK Fortran implementation |
+| libohos_stubs.so | — | libc shim library |
+
+---
+
+## Verification
 
 ```bash
-# 版本信息
+# Version info
 LC_ALL=C ~/.local/R/lib/R/bin/R --version
 
-# 启动并加载所有关键包
+# Startup and load all key packages
 LC_ALL=C ~/.local/R/lib/R/bin/R --vanilla --no-echo \
   -e 'library(methods); library(stats4); cat("OK\n")'
 
-# 矩阵运算测试
+# Matrix multiplication benchmark
 LC_ALL=C ~/.local/R/lib/R/bin/R --vanilla --no-echo \
   -e 'm <- matrix(rnorm(1e6), 1000); cat(system.time({m %*% m})[3], "s\n")'
 ```
 
-## 已验证功能
+## Verified Features
 
-- [x] gzfile() / gzopen 压缩文件读写（zlib-ng-compat）
-- [x] saveRDS/readRDS 压缩序列化（gzip/bzip2/xz）
-- [x] memCompress/memDecompress 内存压缩/解压
-- [x] PDF 设备 afm 字体指标加载
-- [x] R 核心启动 (R 4.4.3)
-- [x] 全部 15 个 base 包构建和加载
-- [x] stats4 最大似然估计 (MLE)
-- [x] libcurl 网络功能
-- [x] 基础图形设备 (grDevices)
-- [x] BLAS/LAPACK 线性代数（OpenBLAS 0.3.29）
-- [x] `R CMD INSTALL` 和 `install.packages()`
-- [x] ggplot2 + CairoPNG 渲染
-- [x] readline 交互式终端（Tab 补全和方向键）
+- [x] gzfile() / gzopen compressed file I/O (zlib-ng-compat)
+- [x] saveRDS/readRDS compressed serialization (gzip/bzip2/xz)
+- [x] memCompress/memDecompress in-memory compression/decompression
+- [x] PDF device afm font metrics loading
+- [x] R core startup (R 4.4.3)
+- [x] All 15 base packages build and load
+- [x] stats4 maximum likelihood estimation (MLE)
+- [x] libcurl networking
+- [x] Base graphics device (grDevices)
+- [x] BLAS/LAPACK linear algebra (OpenBLAS 0.3.29)
+- [x] `R CMD INSTALL` and `install.packages()`
+- [x] ggplot2 + CairoPNG rendering
+- [x] readline interactive terminal (Tab completion and arrow keys)
 - [x] Jupyter IRkernel
-- [x] Seurat 5.5.0（NormalizeData, RunPCA, FindClusters, RunUMAP 等完整流程）
-- [x] DESeq2 1.52.0（makeExampleDESeqDataSet, DESeq, results 等差异表达分析）
-- [ ] tcltk（需 Tcl/Tk 运行时）
-- [ ] 推荐包 (MASS, lattice 等)
+- [x] Seurat 5.5.0 (NormalizeData, RunPCA, FindClusters, RunUMAP, full workflow)
+- [x] DESeq2 1.52.0 (makeExampleDESeqDataSet, DESeq, results, differential expression analysis)
+- [ ] tcltk (requires Tcl/Tk runtime)
+- [ ] Recommended packages (MASS, lattice, etc.)
 
 ---
 
-*最后更新: 2026-06-03（新增 CC17/CC23 修复、DESeq2 验证、namespace.R 修复补丁、Seurat 支持、harmony_install 自动化配置）*
+*Last updated: 2026-06-03 (added CC17/CC23 fix, DESeq2 verification, namespace.R patch, Seurat support, harmony_install automation)*
