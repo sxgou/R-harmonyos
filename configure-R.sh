@@ -60,6 +60,12 @@ mkdir -p "$TMPDIR"
 R_SRC="${PROJECT_ROOT}/src/R-${R_VERSION}"
 BUILD_DIR="${PROJECT_ROOT}/build"
 mkdir -p "$BUILD_DIR"
+
+# Ensure R uses its internal untar (toybox /usr/bin/tar may not handle all formats)
+export R_INSTALL_TAR=internal
+
+# Clean stale conftest files left by autoconf in the build directory
+rm -f "${BUILD_DIR}/conftest.one" "${BUILD_DIR}/conftest.two" 2>/dev/null || true
 cd "$BUILD_DIR"
 
 OHOS_CLANG=/data/service/hnp/bin/aarch64-unknown-linux-ohos-clang
