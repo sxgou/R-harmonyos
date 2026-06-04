@@ -288,7 +288,7 @@ harmony_install <- function(pkgs,
                 log_install(pkg, "CRAN (retry)", "OK")
             }, error = function(e2) {
                 log_install(pkg, "CRAN", "FAIL",
-                    paste("error:", gsub("\\s+", " ", e2$message)))
+                    paste("error:", gsub("[[:space:]]+", " ", e2$message)))
                 message("Failed to install: ", pkg)
             })
         })
