@@ -265,6 +265,15 @@ if [ -f "$MAKECONF" ]; then
         echo "R_INSTALL_TAR = internal" >> "$MAKECONF"
         echo "export R_INSTALL_TAR" >> "$MAKECONF"
     fi
+    # Inject LD_LIBRARY_PATH so Java (BiSheng JDK) can find libz.so and other
+    # shared libraries during make.  The configure-R.sh export is not inherited
+    # by independent make invocations.
+    if ! grep -q "^LD_LIBRARY_PATH" "$MAKECONF" 2>/dev/null; then
+        echo "" >> "$MAKECONF"
+        echo "## Java and toolchain runtime library path" >> "$MAKECONF"
+        echo "LD_LIBRARY_PATH = ${LD_LIBRARY_PATH}" >> "$MAKECONF"
+        echo "export LD_LIBRARY_PATH" >> "$MAKECONF"
+    fi
     # Inject ICU_DATA so it's found during the build (e.g., tools sysdata step)
     if ! grep -q "^ICU_DATA" "$MAKECONF" 2>/dev/null; then
         echo "Injecting ICU_DATA into Makeconf ..."
