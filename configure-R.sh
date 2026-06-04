@@ -42,20 +42,23 @@
 # ================================================================
 set -e
 
+# Derive project root from script location (works regardless of CWD)
+PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
+
 # Version selection:  bash configure-R.sh [version]
 # Default is R 4.4.3.  Examples:
 #   bash configure-R.sh          # configure R 4.4.3
 #   bash configure-R.sh 4.6.0    # configure R 4.6.0
 R_VERSION="${1:-4.4.3}"
 
-export TMPDIR=/storage/Users/currentUser/R-harmonyos/tmp
+export TMPDIR="${PROJECT_ROOT}/tmp"
 export CONFIG_SHELL=/data/service/hnp/bin/bash
 export SHELL=/data/service/hnp/bin/bash
 umask 022
 mkdir -p "$TMPDIR"
 
-R_SRC=/storage/Users/currentUser/R-harmonyos/src/R-${R_VERSION}
-BUILD_DIR=/storage/Users/currentUser/R-harmonyos/build
+R_SRC="${PROJECT_ROOT}/src/R-${R_VERSION}"
+BUILD_DIR="${PROJECT_ROOT}/build"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
@@ -232,7 +235,7 @@ LD_LIBRARY_PATH="${OHOS_LLVM_LIB}:${GFORTRAN_LIB}:${GCC_LIB}:${LD_LIBRARY_PATH}"
     LIBS="-lm" \
     CPPFLAGS="-DSIZE_MAX=18446744073709551615UL -I${HOMEBREW_PREFIX}/include -I${ICU_INSTALL}/include -I${RDEPS}/include -DENABLE_LEGACY_NONAPI -DUSE_MATH_THREADS ${JAVA_CPPFLAGS}" \
     CPP="${OHOS_CLANG} -E --sysroot=$SYSROOT -I${HOMEBREW_PREFIX}/include -I${ICU_INSTALL}/include -I${RDEPS}/include" \
-    CXXCPP="${OHOS_CLANGXX} -E --sysroot=$SYSROOT -I${HOMEBREW_PREFIX}/include -I${RDEPS}/include" 2>&1 | tee /storage/Users/currentUser/R-harmonyos/build/configure.log || true
+    CXXCPP="${OHOS_CLANGXX} -E --sysroot=$SYSROOT -I${HOMEBREW_PREFIX}/include -I${RDEPS}/include" 2>&1 | tee "${BUILD_DIR}/configure.log" || true
 
 # Fix ksh-ism in config.status: 'print -r --' is not supported by HarmonyOS
 # toybox /bin/sh.  The configure-umask.patch already fixes the umask 077
@@ -243,7 +246,7 @@ if [ -f config.status ]; then
         sed -i "s/ECHO='print -r --'/ECHO='echo'/" config.status
     fi
     echo "Re-running config.status ..."
-    /bin/sh config.status 2>&1 | tee -a /storage/Users/currentUser/R-harmonyos/build/configure.log
+    /bin/sh config.status 2>&1 | tee -a "${BUILD_DIR}/configure.log"
 fi
 
 # Inject ICU_DATA into Makeconf so ICU data is found during the build

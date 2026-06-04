@@ -11,6 +11,9 @@
 
 set -e
 
+# Derive project root from script location (works regardless of CWD)
+PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
+
 # Version selection:  bash post-install-R.sh [version]
 # Default is R 4.4.3.
 R_VERSION="${1:-4.4.3}"
@@ -55,7 +58,7 @@ else
         echo "  （请先安装 OHOS SDK）"
     else
         echo "  编译 libohos_stubs.so ..."
-        BUILD_TMP=$(mktemp -p "${TMPDIR:-/storage/Users/currentUser/R-harmonyos/tmp}" -d ohos_stubs_build_XXXXXX)
+        BUILD_TMP=$(mktemp -p "${TMPDIR:-${PROJECT_ROOT}/tmp}" -d ohos_stubs_build_XXXXXX)
         "$OHOS_CLANG" -c -fPIC "$OHOS_STUBS_SRC" -o "$BUILD_TMP/ohos_stubs.o"
         "$OHOS_CLANG" -shared -o "$BUILD_TMP/libohos_stubs.so" "$BUILD_TMP/ohos_stubs.o"
         cp "$BUILD_TMP/libohos_stubs.so" "$OHOS_STUBS_DEST"

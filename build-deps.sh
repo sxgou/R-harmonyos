@@ -18,7 +18,10 @@
 # ============================================================
 set -e
 
-export TMPDIR=/storage/Users/currentUser/R-harmonyos/tmp
+# Derive project root from script location
+PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
+
+export TMPDIR="${PROJECT_ROOT}/tmp"
 mkdir -p "$TMPDIR"
 
 HOMEBREW_PREFIX=/storage/Users/currentUser/.harmonybrew
