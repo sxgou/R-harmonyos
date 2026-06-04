@@ -20,11 +20,11 @@ set -e
 
 # Derive project root from script location
 PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
+source "${PROJECT_ROOT}/config.sh"
 
 export TMPDIR="${PROJECT_ROOT}/tmp"
 mkdir -p "$TMPDIR"
 
-HOMEBREW_PREFIX=/storage/Users/currentUser/.harmonybrew
 BREW=$HOMEBREW_PREFIX/bin/brew
 
 echo "=== Installing R dependencies via harmonybrew ==="
@@ -32,14 +32,14 @@ echo ""
 
 # Install all brew-available dependencies
 # The --formula flag ensures we don't accidentally install a cask
-$BREW install --formula 2>/dev/null \
+$BREW install --formula \
   bzip2 xz pcre2 curl libpng freetype cairo geos gmp \
   libxml2 pixman libjpeg unixodbc expat fontconfig \
   pango cmake ninja libtiff pkgconf autoconf automake \
   bison flex sccache libgit2 libsodium proj webp giflib mpfr
 
 # openssl@3 is likely already installed (ohos-sdk dep), but ensure it
-$BREW install --formula openssl@3 2>/dev/null || true
+$BREW install --formula openssl@3 || true
 
 echo ""
 echo "=== Brew packages installed ==="
@@ -67,8 +67,10 @@ echo ""
 # Verify key headers/libs are findable
 echo "=== Verification ==="
 for lib in libbz2.a liblzma.a libpcre2-8.a libpng.a libjpeg.a libgmp.a; do
-  if [ -f "$HOMEBREW_PREFIX/lib/$lib" ] || [ -f "$HOMEBREW_PREFIX/opt/*/lib/$lib" ]; then
+  if [ -f "$HOMEBREW_PREFIX/lib/$lib" ]; then
     echo "  [OK] $lib found (brew)"
+  elif ls "$HOMEBREW_PREFIX/opt/"*/lib/"$lib" 2>/dev/null | head -1 | grep -q .; then
+    echo "  [OK] $lib found (brew opt)"
   elif [ -f "$PREFIX/lib/$lib" ]; then
     echo "  [OK] $lib found (manual)"
   else

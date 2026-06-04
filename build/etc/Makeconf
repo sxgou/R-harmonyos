@@ -15,9 +15,9 @@ BLAS_LIBS = -lopenblas
 ## C compilers
 CC = /data/service/hnp/bin/aarch64-unknown-linux-ohos-clang
 CFLAGS = -O2 -g0 --sysroot=/data/service/hnp/ohos-sdk.org/ohos-sdk_26.0.0.18/ohos/native/sysroot -I/storage/Users/currentUser/.harmonybrew/include -I/storage/Users/currentUser/.local/R-deps/include -I/storage/Users/currentUser/.local/R-deps/include $(LTO)
-CC17 = 
+CC17 = /data/service/hnp/bin/aarch64-unknown-linux-ohos-clang
 C17FLAGS =  $(LTO)
-CC23 = 
+CC23 = /data/service/hnp/bin/aarch64-unknown-linux-ohos-clang
 C23FLAGS =  $(LTO)
 CC90 = 
 C90FLAGS =  $(LTO)
@@ -220,3 +220,7 @@ ALL_LIBS = $(PKG_LIBS) $(SHLIB_LIBADD) $(SAN_LIBS) $(LIBR)# $(LIBINTL)
 ## ICU data directory (needed at build time for ICU collation)
 ICU_DATA = /storage/Users/currentUser/.local/R-deps/share/icu/78.3
 export ICU_DATA
+
+## OpenBLAS CPU target: NEON (avoid SVE dispatch crash on OHOS)
+OPENBLAS_CORETYPE = NEON
+export OPENBLAS_CORETYPE

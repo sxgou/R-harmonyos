@@ -33,3 +33,9 @@ compile-logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# R development artifacts
+.Rproj
+.Rhistory
+.RData
+.Renviron

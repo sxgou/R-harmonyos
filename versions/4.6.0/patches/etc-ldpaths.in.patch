@@ -12,7 +12,7 @@
 +## precedence over DT_RPATH on musl, so placing brew/lib first ensures
 +## zlib-ng-compat is found before the SDK's libz.
 +## With the corrected RUNPATH order (brew before SDK), this is defensive.
-+R_BREW_LIB="/storage/Users/currentUser/.harmonybrew/lib"
++R_BREW_LIB="@R_BREW_LIB@"
 +: ${R_LD_LIBRARY_PATH=${R_BREW_LIB}:${R_HOME}/lib@R_ARCH@}
 -fi
  if test -n "${R_JAVA_LD_LIBRARY_PATH}"; then

@@ -252,7 +252,7 @@ Key configuration options:
 --with-blas=-lopenblas             # OpenBLAS (SIMD optimized)
 --with-lapack                      # OpenBLAS LAPACK
 --enable-java                      # BiSheng JDK 17
---without-x                        # X11 unavailable (brew has no libXt)
+X11 auto-detected via pkg-config       # libX11 + libXt + libSM provided by brew
 --without-tcltk                    # No Tcl/Tk
 ```
 
@@ -578,7 +578,7 @@ LC_ALL=C ~/.local/R/lib/R/bin/R --vanilla --no-echo \
 - [x] Seurat 5.5.0 (NormalizeData, RunPCA, FindClusters, RunUMAP, full workflow)
 - [x] DESeq2 1.52.0 (makeExampleDESeqDataSet, DESeq, results, differential expression analysis)
 - [ ] tcltk (requires Tcl/Tk runtime)
-- [ ] Recommended packages (MASS, lattice, etc.)
+- [ ] Recommended packages — installable on demand via `harmony_install()`
 
 ---
 

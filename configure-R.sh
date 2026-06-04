@@ -68,22 +68,10 @@ export R_INSTALL_TAR=internal
 rm -f "${BUILD_DIR}/conftest.one" "${BUILD_DIR}/conftest.two" 2>/dev/null || true
 cd "$BUILD_DIR"
 
-OHOS_CLANG=/data/service/hnp/bin/aarch64-unknown-linux-ohos-clang
-OHOS_CLANGXX=/data/service/hnp/bin/aarch64-unknown-linux-ohos-clang++
-GFORTRAN=/storage/Users/currentUser/.local/gfortran/bin/gfortran
-SYSROOT=/data/service/hnp/ohos-sdk.org/ohos-sdk_26.0.0.18/ohos/native/sysroot
-OHOS_LLVM_ROOT=${SYSROOT%/sysroot}/llvm
-OHOS_LLVM_LIB=${OHOS_LLVM_ROOT}/lib
-GFORTRAN_LIB=/storage/Users/currentUser/.local/gfortran/lib64
-GCC_LIB=/storage/Users/currentUser/.local/gfortran/lib/gcc/aarch64-unknown-linux-ohos/14.2.0
-RDEPS=/storage/Users/currentUser/.local/R-deps
-HOMEBREW_PREFIX=/storage/Users/currentUser/.harmonybrew
+# Load toolchain paths from config.sh (edit config.sh to match your environment)
+source "${PROJECT_ROOT}/config.sh"
 
-# Java (BiSheng JDK 17) - for JNI header detection and Java class compilation
-JAVA_HOME=/data/service/hnp/bishengjdk17.0.13_06.org/bishengjdk17.0.13_06_0.13_06
-JAVA=/data/service/hnp/bin/java
-JAVAC=/data/service/hnp/bin/javac
-JAR=/data/service/hnp/bin/jar
+# Java flags (derived from config.sh variables)
 JAVA_CPPFLAGS="-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"
 JAVA_LIBS="-L${JAVA_HOME}/lib/server -ljvm"
 export JAVA_HOME JAVA JAVAC JAR JAVA_CPPFLAGS JAVA_LIBS
@@ -100,7 +88,6 @@ export LD_LIBRARY_PATH="${OHOS_LLVM_LIB}:${HOMEBREW_PREFIX}/lib:${GFORTRAN_LIB}:
 #
 # The wrapper sets LD_LIBRARY_PATH so lld can find its own libxml2 at runtime
 # (HarmonyOS musl ld.so doesn't support $ORIGIN in RUNPATH).
-LLD_WRAPPER=/storage/Users/currentUser/.local/bin/ohos-lld-wrapper
 USE_LD="-fuse-ld=${LLD_WRAPPER}"
 
 # Timezone
@@ -109,8 +96,8 @@ export TZ=CST-8
 # Apply HarmonyOS patches to R source tree
 echo "Applying HarmonyOS patches to ${R_SRC} (R-${R_VERSION})..."
 bash "${R_SRC}/../../apply-patches.sh" "${R_VERSION}" 2>&1 || {
-    echo "Warning: patch application failed. Continuing anyway."
-    echo "Some patches may already be applied."
+    echo "Warning: patch application failed. Continuing anyway." >&2
+    echo "Some patches may already be applied." >&2
 }
 
 # Clean build directory to avoid stale cache
@@ -119,7 +106,6 @@ rm -f config.cache config.status
 # PKG_CONFIG_PATH: brew provides all .pc files.
 # Custom ICU (locally-built with valid .codesign) takes precedence.
 # Note: share/pkgconfig needed for xorgproto (X11 proto .pc files)
-ICU_INSTALL=/storage/Users/currentUser/.local/R-deps
 export PKG_CONFIG_PATH="${ICU_INSTALL}/lib/pkgconfig:${HOMEBREW_PREFIX}/lib/pkgconfig:${HOMEBREW_PREFIX}/share/pkgconfig:${RDEPS}/lib/pkgconfig"
 
 # ICU data: the prebuilt icudt78l.dat provides full locale/collation/break data.
@@ -224,6 +210,7 @@ LD_LIBRARY_PATH="${OHOS_LLVM_LIB}:${GFORTRAN_LIB}:${GCC_LIB}:${LD_LIBRARY_PATH}"
     --enable-R-shlib \
     --without-tcltk \
     --without-aqua \
+    --without-recommended-packages \
     --with-blas="-lopenblas" \
     --with-lapack \
     --with-readline \
@@ -255,10 +242,20 @@ if [ -f config.status ]; then
     /bin/sh config.status 2>&1 | tee -a "${BUILD_DIR}/configure.log"
 fi
 
-# Inject ICU_DATA into Makeconf so ICU data is found during the build
-# (e.g., for the tools package sysdata step which runs R at build time).
+# Substitute @R_BREW_LIB@ in generated ldpaths (resolved from config.sh at
+# configure time instead of hardcoded in the patch file).
+LDPATHS="${BUILD_DIR}/etc/ldpaths"
+if [ -f "$LDPATHS" ]; then
+    if grep -q '@R_BREW_LIB@' "$LDPATHS" 2>/dev/null; then
+        echo "Substituting @R_BREW_LIB@ with ${HOMEBREW_PREFIX}/lib in ldpaths ..."
+        sed -i "s|@R_BREW_LIB@|${HOMEBREW_PREFIX}/lib|g" "$LDPATHS"
+    fi
+fi
+
+# Post-configure Makeconf fixes (single pass to avoid redundant file checks)
 MAKECONF="${BUILD_DIR}/etc/Makeconf"
 if [ -f "$MAKECONF" ]; then
+    # Inject ICU_DATA so it's found during the build (e.g., tools sysdata step)
     if ! grep -q "^ICU_DATA" "$MAKECONF" 2>/dev/null; then
         echo "Injecting ICU_DATA into Makeconf ..."
         echo "" >> "$MAKECONF"
@@ -266,23 +263,15 @@ if [ -f "$MAKECONF" ]; then
         echo "ICU_DATA = ${ICU_DATA}" >> "$MAKECONF"
         echo "export ICU_DATA" >> "$MAKECONF"
     fi
-fi
-
-# Fix CC17 / C23 in Makeconf: cross-compilation leaves them empty, but
-# some packages (e.g. locfit) request C17 standard and fail without CC17.
-MAKECONF="${BUILD_DIR}/etc/Makeconf"
-if [ -f "$MAKECONF" ]; then
+    # Fix CC17 / C23: cross-compilation leaves them empty, but some packages
+    # (e.g. locfit) request C17 standard and fail without CC17.
     for cv in CC17 CC23; do
         if grep -q "^${cv} = \$" "$MAKECONF" 2>/dev/null; then
             echo "Fixing ${cv} in Makeconf ..."
             sed -i "s|^${cv} = \$|${cv} = ${OHOS_CLANG}|" "$MAKECONF"
         fi
     done
-fi
-# Inject OPENBLAS_CORETYPE into Makeconf so the environment is consistent
-# during package compilation (e.g., packages using BLAS via R CMD INSTALL).
-MAKECONF="${BUILD_DIR}/etc/Makeconf"
-if [ -f "$MAKECONF" ]; then
+    # Inject OPENBLAS_CORETYPE for consistent package compilation
     if ! grep -q "^OPENBLAS_CORETYPE" "$MAKECONF" 2>/dev/null; then
         echo "Injecting OPENBLAS_CORETYPE into Makeconf ..."
         echo "" >> "$MAKECONF"

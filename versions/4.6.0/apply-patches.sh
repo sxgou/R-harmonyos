@@ -28,16 +28,37 @@ echo "=== Applying R 4.6.0 HarmonyOS patches ==="
 for pf in ../../$PATCHES/*.patch; do
     name=$(basename "$pf")
     echo "  Applying $name ..."
-    patch -p1 -s < "$pf" 2>/dev/null || true
+    if patch -p1 -s < "$pf" 2>/dev/null; then
+        echo "    $name applied successfully"
+    else
+        echo "    WARNING: $name failed (may already be applied)" >&2
+    fi
 done
 
-echo "  Verifying assignNativeRoutines fix in namespace.R ..."
-if grep -q 'unlockBinding.*varName.*env' src/library/base/R/namespace.R 2>/dev/null; then
-    echo "    assignNativeRoutines fix already applied"
-else
-    echo "    WARNING: assignNativeRoutines patch not applied. Run:"
-    echo "      cd src/R-4.6.0 && patch -p1 < ../../versions/4.6.0/patches/namespace-assignNativeRoutines.patch"
-fi
+echo "  Verifying all patches ..."
+PATCH_OK=0
+PATCH_FAIL=0
+for pf in ../../$PATCHES/*.patch; do
+    name=$(basename "$pf")
+    # Determine the target file from the patch header
+    target=$(head -1 "$pf" | sed 's/^--- //; s/\.orig//; s/.*\///')
+    if [ -z "$target" ]; then
+        echo "    [WARN] $name: could not determine target file" >&2
+        PATCH_FAIL=$((PATCH_FAIL + 1))
+        continue
+    fi
+    # Check if the patch's changes are already reflected
+    # Look for a unique context line in the patch and verify it exists in the target
+    context=$(grep '^[+]' "$pf" | grep -v '^+++' | head -1 | sed 's/^+//')
+    if [ -n "$context" ] && grep -qF "$context" "$target" 2>/dev/null; then
+        echo "    [OK] $name ($target)"
+        PATCH_OK=$((PATCH_OK + 1))
+    else
+        echo "    [WARN] $name: patch content not found in $target" >&2
+        PATCH_FAIL=$((PATCH_FAIL + 1))
+    fi
+done
+echo "  Patches: $PATCH_OK OK, $PATCH_FAIL failed"
 
 # Fix Rmath.h0.in: remove the Rlog1p declaration entirely (it was wrapped
 # in 'extern "C"' which is C++ syntax, and keeping it in C mode conflicts

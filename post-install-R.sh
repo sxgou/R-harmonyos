@@ -1,13 +1,13 @@
 #!/bin/sh
-# R for HarmonyOS 安装后处理脚本
-# 在 make install 之后运行，一键解决所有安装后问题。
+# R for HarmonyOS post-install script
+# Run after make install to apply all post-install fixes.
 #
-# 用法: cd /path/to/R-harmonyos && bash post-install-R.sh
+# Usage: cd /path/to/R-harmonyos && bash post-install-R.sh
 #
-# 执行内容:
-#   1. 生成 methods 包懒加载数据库（必需，否则 stats4 等包无法加载）
-#   2. 生成 NEWS.rds / NEWS.2.rds / NEWS.3.rds（缺少时 make install 会失败）
-#   3. 验证安装完整性
+# Actions:
+#   1. Generate methods lazy-load database (required by stats4 and others)
+#   2. Generate NEWS.rds / NEWS.2.rds / NEWS.3.rds (missing these causes make install to fail)
+#   3. Verify installation integrity
 
 set -e
 
@@ -18,8 +18,12 @@ PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
 # Default is R 4.4.3.
 R_VERSION="${1:-4.4.3}"
 
-# ------ 配置 ------
-# R_HOME 自动检测（优先已安装路径，其次 build 路径）
+# ------ Config ------
+# R_HOME auto-detection (prefers installed path, falls back to build path)
+# Load toolchain paths (for OHOS_CLANG in CC17/CC23 fix)
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+source "${SCRIPT_DIR}/config.sh" 2>/dev/null || true
+
 if [ -x "$HOME/.local/R/lib/R/bin/R" ]; then
     R_BIN="$HOME/.local/R/lib/R/bin/R"
     R_HOME="$HOME/.local/R/lib/R"
@@ -27,111 +31,113 @@ elif [ -x "build/bin/R" ]; then
     R_BIN="$(pwd)/build/bin/R"
     R_HOME="$(pwd)/build"
 else
-    echo "Error: 找不到 R 可执行文件。请先运行 make install 或确认编译已完成。"
-    echo "  查找位置: $HOME/.local/R/lib/R/bin/R"
+    echo "Error: R binary not found. Run make install or complete the build first."
+    echo "  Looked in: $HOME/.local/R/lib/R/bin/R"
     echo "           build/bin/R"
     exit 1
 fi
 
-BUILD_DIR="$(pwd)/build"
-R_SRC="$(pwd)/src/R-${R_VERSION}"
+BUILD_DIR="${PROJECT_ROOT}/build"
+R_SRC="${PROJECT_ROOT}/src/R-${R_VERSION}"
 
-echo "=== R for HarmonyOS 安装后处理 ==="
-echo "R 可执行文件: $R_BIN"
+echo "=== R for HarmonyOS Post-Install ==="
+echo "R binary:     $R_BIN"
 echo "R_HOME:       $R_HOME"
-echo "构建目录:     $BUILD_DIR"
+echo "Build dir:    $BUILD_DIR"
 echo ""
 
-# ------ 1. 编译并安装 libohos_stubs.so ------
-echo "--- [1/3] 编译 libohos_stubs.so ---"
+# ------ 1. Build libohos_stubs.so ------
+echo "--- [1/6] Build libohos_stubs.so ---"
 OHOS_STUBS_SRC="${R_SRC}/src/extra/ohos_stubs/ohos_stubs.c"
 OHOS_STUBS_DEST="$R_HOME/lib/libohos_stubs.so"
 if [ -f "$OHOS_STUBS_DEST" ]; then
-    echo "  [跳过] $OHOS_STUBS_DEST 已存在"
+    echo "  [Skipped] $OHOS_STUBS_DEST already exists"
 elif [ ! -f "$OHOS_STUBS_SRC" ]; then
-    echo "  [跳过] $OHOS_STUBS_SRC 不存在"
-    echo "  （先运行 configure-R.sh 或 apply-patches.sh 以复制新文件）"
+    echo "  [Skipped] $OHOS_STUBS_SRC not found"
+    echo "  (Run configure-R.sh or apply-patches.sh first to copy new files)"
 else
     OHOS_CLANG="/data/service/hnp/bin/aarch64-unknown-linux-ohos-clang"
     if [ ! -x "$OHOS_CLANG" ]; then
-        echo "  [错误] 找不到 OHOS clang: $OHOS_CLANG"
-        echo "  （请先安装 OHOS SDK）"
+        echo "  [ERROR] OHOS clang not found: $OHOS_CLANG"
+        echo "  (Install OHOS SDK first)"
     else
-        echo "  编译 libohos_stubs.so ..."
+        echo "  Building libohos_stubs.so ..."
         BUILD_TMP=$(mktemp -p "${TMPDIR:-${PROJECT_ROOT}/tmp}" -d ohos_stubs_build_XXXXXX)
         "$OHOS_CLANG" -c -fPIC "$OHOS_STUBS_SRC" -o "$BUILD_TMP/ohos_stubs.o"
         "$OHOS_CLANG" -shared -o "$BUILD_TMP/libohos_stubs.so" "$BUILD_TMP/ohos_stubs.o"
         cp "$BUILD_TMP/libohos_stubs.so" "$OHOS_STUBS_DEST"
         rm -rf "$BUILD_TMP"
-        echo "  [完成] libohos_stubs.so 已安装到 $OHOS_STUBS_DEST"
+        echo "  [Done] libohos_stubs.so installed to $OHOS_STUBS_DEST"
     fi
 fi
 echo ""
 
-# ------ 2. 生成 methods 包懒加载数据库 ------
-echo "--- [2/3] 生成 methods 包懒加载数据库 ---"
+# ------ 2. Generate methods package lazy-load database ------
+echo "--- [2/6] Generate methods package lazy-load database ---"
 METHODS_DIR="$R_HOME/library/methods/R"
 if [ -f "$METHODS_DIR/methods.rdb" ] && [ -f "$METHODS_DIR/methods.rdx" ]; then
-    echo "  [跳过] methods 懒加载数据库已存在:"
+    echo "  [Skipped] methods lazy-load database already exists:"
     echo "    $METHODS_DIR/methods.rdb"
     echo "    $METHODS_DIR/methods.rdx"
 else
     echo 'tools:::makeLazyLoading("methods", compress = FALSE)' | \
         R_DEFAULT_PACKAGES=NULL LC_ALL=C "$R_BIN" --vanilla --no-echo
-    echo "  [完成] methods 懒加载数据库已生成"
+    echo "  [Done] methods lazy-load database generated"
 fi
 echo ""
 
-# ------ 3. 生成 NEWS.rds ------
-echo "--- [3/3] 生成 NEWS.rds ---"
+# ------ 3. Generate NEWS.rds ------
+echo "--- [3/6] Generate NEWS.rds ---"
+# Save original directory for later restoration
+OLD_PWD=$(pwd)
 if [ ! -d "$BUILD_DIR/doc" ]; then
-    echo "  [跳过] $BUILD_DIR/doc 不存在，跳过 NEWS.rds 生成"
-    echo "  （make install 可能需要手动处理）"
+    echo "  [Skipped] $BUILD_DIR/doc not found, skipping NEWS.rds generation"
+    echo "  (make install may need manual handling for this)"
 else
     cd "$BUILD_DIR/doc"
 
     for news_rd in NEWS.Rd NEWS.2.Rd NEWS.3.Rd; do
         news_rds="${news_rd%.Rd}.rds"
         if [ -f "$news_rds" ]; then
-            echo "  [跳过] $news_rds 已存在"
+            echo "  [Skipped] $news_rds already exists"
             continue
         fi
-        # 检查源文件是否存在
+        # Check if source file exists
         src_rd="../../src/R-${R_VERSION}/doc/$news_rd"
         if [ ! -f "$src_rd" ]; then
-            echo "  [跳过] $src_rd 不存在"
+            echo "  [Skipped] $src_rd not found"
             continue
         fi
-        echo "  生成 $news_rds ..."
+        echo "  Generating $news_rds ..."
         LC_ALL=C "$R_BIN" --vanilla --no-echo -e \
             'options(warn=1); saveRDS(tools:::prepare_Rd(tools::parse_Rd(
               "'"$src_rd"'",
               macros = "../share/Rd/macros/system.Rd"), stages = "install",
               warningCalls = FALSE), "'"$news_rds"'")' 2>/dev/null || \
-        echo "  [警告] $news_rds 生成失败（make install 可能会重试）"
+        echo "  [Warning] $news_rds generation failed (make install may retry)"
     done
 
-    cd "$(pwd)"  # 回到原始目录
-    echo "  [完成] NEWS.rds 处理完毕"
+    cd "$OLD_PWD"
+    echo "  [Done] NEWS.rds generated"
 fi
 echo ""
 
-# ------ 4. 修复已安装 R 的 CC17/CC23 ------
-echo "--- [4/6] 修复 CC17/CC23 ---"
+# ------ 4. Fix CC17/CC23 in installed Makeconf ------
+echo "--- [4/6] Fix CC17/CC23 in installed Makeconf ---"
 for mc in "$R_HOME/etc/Makeconf" "$BUILD_DIR/etc/Makeconf"; do
     if [ -f "$mc" ]; then
         for cv in CC17 CC23; do
             if grep -q "^${cv} = \$" "$mc" 2>/dev/null; then
                 sed -i "s|^${cv} = \$|${cv} = ${OHOS_CLANG:-/data/service/hnp/bin/aarch64-unknown-linux-ohos-clang}|" "$mc"
-                echo "  [OK] 已修复 $mc 中的 ${cv}"
+                echo "  [OK] ${cv} fixed in $mc"
             fi
         done
     fi
 done
 echo ""
 
-# ------ 5. 配置用户 R 环境（~/.Rprofile）------
-echo "--- [5/6] 配置 ~/.Rprofile ---"
+# ------ 5. Configure user R environment (~/.Rprofile) ------
+echo "--- [5/6] Configure user R environment (~/.Rprofile) ---"
 RPROFILE="${HOME}/.Rprofile"
 TMPDIR_DEFAULT="/data/storage/el4/base/R-build"
 PATCH_RCPP_SCRIPT="$(pwd)/versions/4.6.0/patch-rcpp.sh"
@@ -161,24 +167,87 @@ if (r_lib %in% .libPaths()) {
 
 # ---- harmony_install() ----
 harmony_install <- function(pkgs,
-                             repos = "https://mirrors.tuna.tsinghua.edu.cn/CRAN",
+                             repos = NULL,
                              bioc = FALSE, github = FALSE, ...) {
-    # GitHub 包必须用 "owner/repo" 格式，例如 "satijalab/seurat-wrappers"。
-    # 不要只用包名（如 "seurat-wrappers"），否则可能匹配到多个仓库。
+    # ---- Auto-detect brew prefix and set env vars ----
+    brew_prefix <- Sys.getenv("HOMEBREW_PREFIX",
+      default = file.path(Sys.getenv("HOME"), ".harmonybrew"))
+    pkg_config <- paste(
+      file.path(brew_prefix, "lib/pkgconfig"),
+      file.path(brew_prefix, "share/pkgconfig"),
+      sep = ":")
+    Sys.setenv(PKG_CONFIG_PATH = pkg_config)
+    Sys.setenv(OPENBLAS_CORETYPE = "NEON")
+
+    # ---- Default repo chain: harmony-cran -> CRAN ----
+    if (is.null(repos)) {
+        cran_url <- "https://cloud.r-project.org"
+        harmony_cran <- "https://yourname.github.io/harmony-cran"
+        # Test reachability (only once per session, cache result)
+        if (isTRUE(getOption("harmony_cran_ok", NULL))) {
+            repos <- c(harmony_cran = harmony_cran, CRAN = cran_url)
+        } else if (isFALSE(getOption("harmony_cran_ok", NULL))) {
+            repos <- c(CRAN = cran_url)
+        } else {
+            reachable <- tryCatch(
+                length(readLines(harmony_cran, n = 1)) > 0,
+                error = function(e) FALSE)
+            if (reachable) {
+                options(harmony_cran_ok = TRUE)
+                repos <- c(harmony_cran = harmony_cran, CRAN = cran_url)
+                message("harmony-cran repo reachable: ", harmony_cran)
+            } else {
+                options(harmony_cran_ok = FALSE)
+                repos <- c(CRAN = cran_url)
+                message("harmony-cran repo not reachable, using CRAN only")
+            }
+        }
+    }
+
+    # ---- Log file under R installation directory ----
+    r_home <- Sys.getenv("R_HOME")
+    if (nzchar(r_home)) {
+        log_dir <- file.path(dirname(dirname(r_home)), "var", "log")
+    } else {
+        log_dir <- file.path(Sys.getenv("HOME"), ".local", "R", "var", "log")
+    }
+    dir.create(log_dir, showWarnings = FALSE, recursive = TRUE)
+    log_file <- file.path(log_dir, "harmony-install.log")
+
+    log_install <- function(pkg, source, status, extra = "") {
+        ts <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+        cat(sprintf("[%s] %s source: %s status: %s %s\n",
+            ts, pkg, source, status, extra),
+            file = log_file, append = TRUE)
+    }
+
+    # ---- Install remotes if needed for Bioc/GitHub ----
     if (bioc || github) {
         if (!requireNamespace("remotes", quietly = TRUE)) {
             message("Installing remotes ...")
-            install.packages("remotes", repos = repos,
-                             configure.args = "--host=aarch64-linux-ohos",
-                             INSTALL_opts = "--no-test-load")
+            tryCatch(
+                install.packages("remotes", repos = repos,
+                    configure.args = "--host=aarch64-linux-ohos",
+                    INSTALL_opts = "--no-test-load"),
+                error = function(e) {
+                    install.packages("remotes", repos = repos,
+                        INSTALL_opts = "--no-test-load")
+                })
         }
     }
     if (bioc && !requireNamespace("BiocManager", quietly = TRUE)) {
         message("Installing BiocManager ...")
-        install.packages("BiocManager", repos = repos,
-                         configure.args = "--host=aarch64-linux-ohos",
-                         INSTALL_opts = "--no-test-load")
+        tryCatch(
+            install.packages("BiocManager", repos = repos,
+                configure.args = "--host=aarch64-linux-ohos",
+                INSTALL_opts = "--no-test-load"),
+            error = function(e) {
+                install.packages("BiocManager", repos = repos,
+                    INSTALL_opts = "--no-test-load")
+            })
     }
+
+    # ---- Install each package ----
     for (pkg in pkgs) {
         message("Installing: ", pkg)
         tryCatch({
@@ -199,19 +268,29 @@ harmony_install <- function(pkgs,
                     INSTALL_opts = "--no-test-load",
                     ...)
             }
+            log_install(pkg,
+                if (grepl("harmony_cran", deparse(repos)[1])) "harmony-cran" else "CRAN",
+                "OK")
         }, error = function(e) {
             message("Retrying without configure.args: ", pkg)
-            if (bioc) {
-                BiocManager::install(pkg,
-                    INSTALL_opts = "--no-test-load", ...)
-            } else if (github) {
-                remotes::install_github(pkg,
-                    INSTALL_opts = "--no-test-load", ...)
-            } else {
-                install.packages(pkg,
-                    repos = repos,
-                    INSTALL_opts = "--no-test-load", ...)
-            }
+            tryCatch({
+                if (bioc) {
+                    BiocManager::install(pkg,
+                        INSTALL_opts = "--no-test-load", ...)
+                } else if (github) {
+                    remotes::install_github(pkg,
+                        INSTALL_opts = "--no-test-load", ...)
+                } else {
+                    install.packages(pkg,
+                        repos = repos,
+                        INSTALL_opts = "--no-test-load", ...)
+                }
+                log_install(pkg, "CRAN (retry)", "OK")
+            }, error = function(e2) {
+                log_install(pkg, "CRAN", "FAIL",
+                    paste("error:", gsub("\\s+", " ", e2$message)))
+                message("Failed to install: ", pkg)
+            })
         })
     }
     # Auto-patch Rcpp undoRmath.h when Rcpp is installed
@@ -235,10 +314,16 @@ harmony_install <- function(pkgs,
 if (interactive()) {
     message("R on HarmonyOS | TMPDIR=", Sys.getenv("TMPDIR"))
     message("Use harmony_install() for packages with configure scripts")
+    message("Install log: ", file.path(
+        if (nzchar(Sys.getenv("R_HOME")))
+            dirname(dirname(Sys.getenv("R_HOME")))
+        else
+            file.path(Sys.getenv("HOME"), ".local", "R"),
+        "var", "log", "harmony-install.log"))
 }
 RPROFILE_EOF
 
-echo "  [OK] $RPROFILE 已创建"
+echo "  [OK] $RPROFILE created"
 
 # Also add TMPDIR to shell profile if not already there
 SHELL_PROFILE="${HOME}/.bashrc"
@@ -247,15 +332,15 @@ if [ -f "$SHELL_PROFILE" ]; then
         echo "" >> "$SHELL_PROFILE"
         echo "# HarmonyOS R build temp directory" >> "$SHELL_PROFILE"
         echo "export TMPDIR=${TMPDIR_DEFAULT}" >> "$SHELL_PROFILE"
-        echo "  [OK] TMPDIR 已添加到 $SHELL_PROFILE"
+        echo "  [OK] TMPDIR added to $SHELL_PROFILE"
     else
-        echo "  [跳过] TMPDIR 已在 $SHELL_PROFILE 中"
+        echo "  [Skipped] TMPDIR already set in $SHELL_PROFILE"
     fi
 fi
 echo ""
 
-# ------ 5. 验证安装完整性 ------
-echo "--- [5/5] 验证安装完整性 ---"
+# ------ 6. Verify installation integrity ------
+echo "--- [6/6] Verify installation integrity ---"
 ERRORS=0
 
 check_file() {
@@ -263,26 +348,26 @@ check_file() {
     if [ -f "$file" ]; then
         echo "  [OK] $desc"
     else
-        echo "  [ERR] $desc: 缺少 $file"
+        echo "  [ERR] $desc: missing $file"
         ERRORS=$((ERRORS + 1))
     fi
 }
 
-check_file "$R_HOME/bin/exec/R" "R 主二进制"
+check_file "$R_HOME/bin/exec/R" "R main binary"
 check_file "$R_HOME/lib/libR.so" "libR.so"
-check_file "$R_HOME/library/base/R/base" "base 包"
-check_file "$R_HOME/library/methods/R/methods" "methods 包 (nspackloader)"
+check_file "$R_HOME/library/base/R/base" "base package"
+check_file "$R_HOME/library/methods/R/methods" "methods package (nspackloader)"
 check_file "$R_HOME/library/methods/R/methods.rdb" "methods.rdb"
 check_file "$R_HOME/library/methods/R/methods.rdx" "methods.rdx"
-check_file "$R_HOME/library/stats/R/stats" "stats 包"
-check_file "$R_HOME/library/graphics/R/graphics" "graphics 包"
-check_file "$R_HOME/library/grDevices/R/grDevices" "grDevices 包"
-check_file "$R_HOME/library/utils/R/utils" "utils 包"
+check_file "$R_HOME/library/stats/R/stats" "stats package"
+check_file "$R_HOME/library/graphics/R/graphics" "graphics package"
+check_file "$R_HOME/library/grDevices/R/grDevices" "grDevices package"
+check_file "$R_HOME/library/utils/R/utils" "utils package"
 check_file "$R_HOME/lib/libohos_stubs.so" "libohos_stubs.so"
 
 echo ""
 if [ $ERRORS -eq 0 ]; then
-    echo "=== 安装后处理全部完成，验证通过 ==="
+    echo "=== Post-install complete, all checks passed ==="
 else
-    echo "=== 完成（$ERRORS 个文件缺失，请检查上述 [ERR] 项）==="
+    echo "=== Done ($ERRORS files missing, check [ERR] entries above) ==="
 fi
