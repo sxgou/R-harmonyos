@@ -300,6 +300,17 @@ if [ -f "$MAKECONF" ]; then
     fi
 fi
 
+# Fix JAVA_LD_LIBRARY_PATH in javaconf: replace ~autodetect~ with actual path
+# including HOMEBREW_PREFIX/lib so Java can find libz.so at runtime
+# (Java uses RPATH which takes precedence over LD_LIBRARY_PATH in musl)
+JAVACONF="${BUILD_DIR}/etc/javaconf"
+if [ -f "$JAVACONF" ]; then
+    if grep -q "JAVA_LD_LIBRARY_PATH=~autodetect~" "$JAVACONF" 2>/dev/null; then
+        echo "Fixing JAVA_LD_LIBRARY_PATH in javaconf ..."
+        sed -i "s|JAVA_LD_LIBRARY_PATH=~autodetect~|JAVA_LD_LIBRARY_PATH=${HOMEBREW_PREFIX}/lib|" "$JAVACONF"
+    fi
+fi
+
 # Inject ICU_DATA into ldpaths (sourced by bin/R at startup) so ICU
 # data is found at runtime too.
 LDPATHS="${BUILD_DIR}/etc/ldpaths"
