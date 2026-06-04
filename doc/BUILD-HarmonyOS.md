@@ -154,6 +154,9 @@ Non-brew libraries (fftw3, zeromq, ANN, glpk) must be cross-compiled manually an
 Choose the R version you want. Currently supports 4.4.3 and 4.6.0:
 
 ```bash
+# Create src directory if it doesn't exist
+mkdir -p src
+
 # Download R 4.4.3
 curl -L https://cran.r-project.org/src/base/R-4/R-4.4.3.tar.gz | tar xz -C src/
 

@@ -21,6 +21,7 @@ cd R-harmonyos
 bash build-deps.sh
 
 # Step 3: Download R 4.4.3 source (or 4.6.0)
+mkdir -p src
 curl -L https://cran.r-project.org/src/base/R-4/R-4.4.3.tar.gz | tar xz -C src/
 
 # Step 4: Configure (auto-patches + cross-compile config). Default 4.4.3:
