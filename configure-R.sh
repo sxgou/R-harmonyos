@@ -252,9 +252,19 @@ if [ -f "$LDPATHS" ]; then
     fi
 fi
 
+# Clean stale conftest files that autoconf re-creates during configure
+rm -f "${BUILD_DIR}/conftest.one" "${BUILD_DIR}/conftest.two" 2>/dev/null || true
+
 # Post-configure Makeconf fixes (single pass to avoid redundant file checks)
 MAKECONF="${BUILD_DIR}/etc/Makeconf"
 if [ -f "$MAKECONF" ]; then
+    # Ensure R uses internal untar (toybox tar is incomplete for some formats)
+    if ! grep -q "^R_INSTALL_TAR" "$MAKECONF" 2>/dev/null; then
+        echo "" >> "$MAKECONF"
+        echo "## Use R's internal untar (toybox /usr/bin/tar is incomplete)" >> "$MAKECONF"
+        echo "R_INSTALL_TAR = internal" >> "$MAKECONF"
+        echo "export R_INSTALL_TAR" >> "$MAKECONF"
+    fi
     # Inject ICU_DATA so it's found during the build (e.g., tools sysdata step)
     if ! grep -q "^ICU_DATA" "$MAKECONF" 2>/dev/null; then
         echo "Injecting ICU_DATA into Makeconf ..."
