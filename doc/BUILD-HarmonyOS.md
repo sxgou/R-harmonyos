@@ -197,6 +197,9 @@ bash apply-patches.sh 4.6.0
 | `Rmath.h0.in.patch` | 给 `#define log1p Rlog1p` 添加 `#ifndef __cplusplus` 保护，防止 C++ 编译时 `::log1p` 被宏展开为 `::Rlog1p` 导致编译错误（影响 Rcpp、Armadillo 等 C++ 包） | ✓ | ✓ | ✓ |
 | `src-extra-Makefile.in-ohos_stubs.patch` | 将 ohos_stubs 加入 `src/extra/Makefile.in` 的 SUBDIRS，使 libohos_stubs.so 作为标准 make 流程的一部分自动构建 | ✗ | ✓ | ✗ |
 | `etc-ldpaths.in-LD_PRELOAD.patch` | 在 ldpaths.in 模板中嵌入 LD_PRELOAD 配置，使 libohos_stubs.so 在每次 R 启动时自动预加载 | ✗ | ✓ | ✗ |
+| `configure-umask.patch` | configure 创建临时目录时使用 `umask 022` 而非 `umask 077`，避免 hmdfs 上 0700 权限导致 Permission denied（问题 #3） | ✗ | ✗ | ✓ |
+| `tools-copy-if-change.patch` | `copy-if-change` 用 `rm -f && cp` 替代 `cp -f`，避免 hmdfs 覆盖已有文件失败（问题 #4） | ✗ | ✗ | ✓ |
+| `Makefile.in-install-rm.patch` | `install-libR-exists` 在 `$(INSTALL_DATA)` 前先 `rm -f`，避免 hmdfs 覆盖 `libR.so` 失败（问题 #4） | ✗ | ✗ | ✓ |
 
 R 4.5.2 特有的内联 python 修复（集成在 `apply-patches.sh` 中）：
 
@@ -285,12 +288,7 @@ make install
 | Base 包 | `~/.local/R/lib/R/library/*/` |
 | 包装脚本 | `~/.local/R/lib/R/bin/R` |
 
-**注意**：hmdfs 不允许覆盖已存在的 `.so` 文件。如需重新安装，先删除旧文件：
-
-```bash
-rm -rf ~/.local/R/lib/R/lib/*.so ~/.local/R/lib/R/bin/exec/R
-make install
-```
+**注意**：hmdfs 不允许覆盖已存在的文件。`tools/copy-if-change` 已通过补丁自动在安装前执行 `rm -f`（见 `tools-copy-if-change.patch`），`Makefile.in` 中 `install-libR-exists` 目标也已修复。如需重新安装，直接运行 `make install` 即可。
 
 ---
 

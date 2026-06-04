@@ -1,0 +1,11 @@
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -129,7 +129,8 @@ install-libR:
+ 	@if test -f lib$(R_ARCH)/$(libR_la); then $(MAKE) install-libR-exists; fi
+ install-libR-exists:
+ 		@$(MKINSTALLDIRS) "$(DESTDIR)${libdir}"
+-		@$(INSTALL_DATA) -m755 lib$(R_ARCH)/$(libR_la) "$(DESTDIR)${libdir}"
++		@rm -f "$(DESTDIR)${libdir}/$(libR_la)"
++		@$(INSTALL_DATA) -m755 lib$(R_ARCH)/$(libR_la) "$(DESTDIR)${libdir}"
+ uninstall-libR:
+ 		@rm -f "$(DESTDIR)${libdir}/$(libR_la)"

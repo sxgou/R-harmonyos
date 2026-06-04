@@ -234,33 +234,14 @@ LD_LIBRARY_PATH="${OHOS_LLVM_LIB}:${GFORTRAN_LIB}:${GCC_LIB}:${LD_LIBRARY_PATH}"
     CPP="${OHOS_CLANG} -E --sysroot=$SYSROOT -I${HOMEBREW_PREFIX}/include -I${ICU_INSTALL}/include -I${RDEPS}/include" \
     CXXCPP="${OHOS_CLANGXX} -E --sysroot=$SYSROOT -I${HOMEBREW_PREFIX}/include -I${RDEPS}/include" 2>&1 | tee /storage/Users/currentUser/R-harmonyos/build/configure.log || true
 
-# Patch config.status to fix HarmonyOS filesystem incompatibilities:
-#   1. umask 077 + mktemp -d creates unwritable dirs ("Permission denied" on subs1.awk)
-#   2. print -r -- is a ksh-ism that bash doesn't support
-#   3. mktemp with ./confXXXXXX template issues
+# Fix ksh-ism in config.status: 'print -r --' is not supported by HarmonyOS
+# toybox /bin/sh.  The configure-umask.patch already fixes the umask 077
+# temp dir issue at the configure script level, so no need for Python regex.
 if [ -f config.status ]; then
-    echo "Patching config.status for HarmonyOS compatibility ..."
-    python3 -c "
-import re
-with open('config.status', 'r') as f:
-    c = f.read()
-# Fix 1: Replace umask 077 + mktemp/mkdir temp dir creation with simple fallback
-c = re.sub(
-    r'tmp=\`\(\s*umask\s+077\s*&&\s*(mktemp\s+-d\s+\S*|mkdir\s+-p\s+\S*)\)\s*2>/dev/null\`\s*&&\s*test\s+-d\s+\"\\\$\"\s*\}\s*\|\|\s*\{[^}]*\}',
-    '{ tmp=./conftmp\n  mkdir -p \"./conftmp\"\n}',
-    c, flags=re.DOTALL
-)
-# Fix 2: standalone umask 077 + mkdir patterns
-c = re.sub(r'\(umask\s+077\s*&&\s*mkdir\s+\"\\\$tmp\"\)', 'mkdir -p \"\$tmp\" 2>/dev/null', c)
-# Fix 3: umask 077 && mktemp (no subshell wrapper)
-c = re.sub(r'umask\s+077\s*&&\s*mktemp\s+-d\s+', 'mkdir -p ', c)
-# Fix 4: bare mktemp -d with confXXXXXX template
-c = c.replace('mktemp -d \"./confXXXXXX\"', 'mkdir -p ./conftmp')
-# Fix 5: ksh-ism 'print -r --' -> 'echo' (bash doesn't support it)
-c = c.replace(\"ECHO='print -r --'\", \"ECHO='echo'\")
-with open('config.status', 'w') as f:
-    f.write(c)
-" 2>/dev/null || true
+    if grep -q "ECHO='print -r --'" config.status 2>/dev/null; then
+        echo "Fixing ECHO in config.status (ksh-ism -> echo) ..."
+        sed -i "s/ECHO='print -r --'/ECHO='echo'/" config.status
+    fi
     echo "Re-running config.status ..."
     /bin/sh config.status 2>&1 | tee -a /storage/Users/currentUser/R-harmonyos/build/configure.log
 fi
