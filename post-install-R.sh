@@ -190,7 +190,7 @@ harmony_install <- function(pkgs,
             repos <- c(CRAN = cran_url)
         } else {
             reachable <- tryCatch(
-                length(readLines(harmony_cran, n = 1)) > 0,
+                length(readLines(paste0(harmony_cran, "/src/contrib/PACKAGES"), n = 1)) > 0,
                 error = function(e) FALSE)
             if (reachable) {
                 options(harmony_cran_ok = TRUE)
