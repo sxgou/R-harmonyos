@@ -58,6 +58,21 @@ After installation, start R via the wrapper script:
 
 ---
 
+## Package Installation
+
+For R packages that are difficult to cross-compile from source, pre-built binaries
+are available from [harmony-cran](https://github.com/sxgou/harmony-cran):
+
+```r
+harmony_install("Matrix")  # auto-detects harmony-cran repo
+```
+
+The `harmony-cran` repository contains all 15 R recommended packages built on-device
+for `aarch64-linux-ohos`. See [harmony-cran on GitHub](https://github.com/sxgou/harmony-cran)
+for the full package list and build instructions.
+
+---
+
 ## Project Structure
 
 ```
