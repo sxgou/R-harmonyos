@@ -182,7 +182,7 @@ harmony_install <- function(pkgs,
     # ---- Default repo chain: harmony-cran -> CRAN ----
     if (is.null(repos)) {
         cran_url <- "https://cloud.r-project.org"
-        harmony_cran <- "https://sxgou.github.io/harmony-cran"
+        harmony_cran <- "https://raw.githubusercontent.com/sxgou/harmony-cran/master"
         # Test reachability (only once per session, cache result)
         if (isTRUE(getOption("harmony_cran_ok", NULL))) {
             repos <- c(harmony_cran = harmony_cran, CRAN = cran_url)
