@@ -171,7 +171,7 @@ harmony_install <- function(pkgs,
                              bioc = FALSE, github = FALSE, ...) {
     # ---- Auto-detect brew prefix and set env vars ----
     brew_prefix <- Sys.getenv("HOMEBREW_PREFIX",
-      default = file.path(Sys.getenv("HOME"), ".harmonybrew"))
+      unset = file.path(Sys.getenv("HOME"), ".harmonybrew"))
     pkg_config <- paste(
       file.path(brew_prefix, "lib/pkgconfig"),
       file.path(brew_prefix, "share/pkgconfig"),
